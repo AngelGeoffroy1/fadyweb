@@ -26,8 +26,6 @@ import {
 } from 'lucide-react'
 import { Database } from '@/lib/supabase/types'
 
-// Fonction pour générer les paramètres statiques
-
 type User = Database['public']['Tables']['users']['Row']
 type Booking = Database['public']['Tables']['bookings']['Row'] & {
   hairdresser_name?: string

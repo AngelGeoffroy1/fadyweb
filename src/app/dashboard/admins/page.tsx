@@ -61,9 +61,19 @@ export default function AdminsPage() {
     setAddLoading(true)
     try {
       // Vérifier si l'utilisateur existe dans auth.users
-      const { data: userData, error: userError } = await supabase.auth.admin.getUserByEmail(newAdminEmail)
+      const { data: usersData, error: userError } = await supabase.auth.admin.listUsers({
+        page: 1,
+        perPage: 1000 // Récupérer un grand nombre d'utilisateurs pour filtrer côté client
+      })
 
-      if (userError || !userData.user) {
+      if (userError) {
+        toast.error('Erreur lors de la recherche de l\'utilisateur')
+        return
+      }
+
+      const userData = usersData.users.find(user => user.email === newAdminEmail)
+
+      if (!userData) {
         toast.error('Utilisateur non trouvé avec cet email')
         return
       }
@@ -72,7 +82,7 @@ export default function AdminsPage() {
       const { data: existingAdmin } = await supabase
         .from('admins')
         .select('id')
-        .eq('user_id', userData.user.id)
+        .eq('user_id', userData.id)
         .single()
 
       if (existingAdmin) {
@@ -92,7 +102,7 @@ export default function AdminsPage() {
       const { error } = await supabase
         .from('admins')
         .insert({
-          user_id: userData.user.id,
+          user_id: userData.id,
           role: 'admin',
           created_by: currentAdmin?.id || null
         })

@@ -6,8 +6,11 @@ const nextConfig: NextConfig = {
     // Désactiver le prerendering pour éviter les erreurs Supabase
     staticGenerationRetryCount: 0,
   },
-  // Forcer le rendu dynamique pour toutes les pages
-  trailingSlash: false,
+  // Configuration pour Netlify
+  trailingSlash: true,
+  images: {
+    unoptimized: true
+  },
 };
 
 export default nextConfig;

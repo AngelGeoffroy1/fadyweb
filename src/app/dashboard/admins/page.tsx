@@ -9,7 +9,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { motion } from 'framer-motion'
 import { Settings, Plus, Trash2, UserPlus, Search } from 'lucide-react'
-import { Database } from '@/lib/supabase/types'
 import { toast } from 'sonner'
 
 type Admin = {
@@ -20,7 +19,7 @@ type Admin = {
   created_by: string | null
   email: string
   full_name: string | null
-  user_created_at: string
+  user_created_at: string | null
   created_by_email: string | null
 }
 
@@ -92,10 +91,14 @@ export default function AdminsPage() {
 
       // Récupérer l'ID de l'admin actuel
       const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        toast.error('Impossible de vérifier vos droits administrateur')
+        return
+      }
       const { data: currentAdmin } = await supabase
         .from('admins')
         .select('id')
-        .eq('user_id', user?.id)
+        .eq('user_id', user.id)
         .single()
 
       // Créer l'admin

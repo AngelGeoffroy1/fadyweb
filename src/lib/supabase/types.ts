@@ -595,7 +595,20 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      admins_with_users: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          created_by_email: string | null
+          email: string
+          full_name: string | null
+          id: string
+          role: string | null
+          user_created_at: string | null
+          user_id: string
+        }
+        Relationships: []
+      }
     }
     Functions: {
       calculate_hairdresser_rating: {

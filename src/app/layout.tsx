@@ -32,6 +32,11 @@ const uberMoveBold = localFont({
 export const metadata = {
   title: 'Fady Admin Dashboard',
   description: 'Interface d\'administration pour la plateforme Fady',
+  icons: {
+    icon: '/favicon.png',
+    shortcut: '/favicon.png',
+    apple: '/icon.png',
+  },
 }
 
 export default function RootLayout({

@@ -90,7 +90,7 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="admin@fady.com"
                   required
-                  className="transition-all duration-200 focus:ring-2 focus:ring-primary/20"
+                  className="transition-all duration-200 focus:ring-2 focus:ring-primary/20 placeholder:opacity-50"
                 />
               </div>
               <div className="space-y-2">
@@ -104,7 +104,7 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="transition-all duration-200 focus:ring-2 focus:ring-primary/20"
+                  className="transition-all duration-200 focus:ring-2 focus:ring-primary/20 placeholder:opacity-50"
                 />
               </div>
               {error && (
@@ -119,7 +119,7 @@ export default function LoginPage() {
               <Button
                 type="submit"
                 disabled={loading}
-                className="w-full transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                className="w-full transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] bg-accent hover:bg-accent/90 text-accent-foreground"
               >
                 {loading ? 'Connexion...' : 'Se connecter'}
               </Button>

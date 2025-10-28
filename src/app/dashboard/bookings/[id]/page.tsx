@@ -397,7 +397,7 @@ export default function BookingDetailPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => router.push(`/dashboard/users/${data.booking.user_id}`)}
+                  onClick={() => router.push(`/dashboard/users/${data.booking?.user_id}`)}
                 >
                   Voir le profil complet
                 </Button>
@@ -456,7 +456,7 @@ export default function BookingDetailPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => router.push(`/dashboard/hairdressers/${data.booking.hairdresser_id}`)}
+                  onClick={() => router.push(`/dashboard/hairdressers/${data.booking?.hairdresser_id}`)}
                 >
                   Voir le profil complet
                 </Button>

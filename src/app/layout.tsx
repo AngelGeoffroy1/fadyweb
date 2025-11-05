@@ -1,6 +1,7 @@
 import localFont from 'next/font/local'
 import './globals.css'
 import { Toaster } from '@/components/ui/sonner'
+import { ThemeProvider } from '@/components/providers/theme-provider'
 
 // Configuration temporaire des polices - remplacez par les vraies polices Uber Move
 const uberMoveMedium = localFont({
@@ -45,10 +46,16 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="fr" className={`${uberMoveMedium.variable} ${uberMoveBold.variable}`}>
+    <html lang="fr" className={`${uberMoveMedium.variable} ${uberMoveBold.variable}`} suppressHydrationWarning>
       <body className={`${uberMoveMedium.className} antialiased`}>
-        {children}
-        <Toaster />
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="light"
+          enableSystem={false}
+        >
+          {children}
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   )

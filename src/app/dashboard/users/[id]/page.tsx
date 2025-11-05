@@ -358,6 +358,31 @@ export default function UserDetailPage() {
                     </div>
                   )}
 
+                  {data.user.gender && (
+                    <div className="flex items-center space-x-2">
+                      <User className="w-4 h-4 text-muted-foreground" />
+                      <Badge variant="outline">
+                        {data.user.gender === 'homme' ? 'Homme' : 
+                         data.user.gender === 'femme' ? 'Femme' : 
+                         data.user.gender === 'autre' ? 'Autre' : 
+                         'Non spécifié'}
+                      </Badge>
+                    </div>
+                  )}
+
+                  {data.user.birth_date && (
+                    <div className="flex items-center space-x-2">
+                      <Calendar className="w-4 h-4 text-muted-foreground" />
+                      <span>
+                        Né(e) le {new Date(data.user.birth_date).toLocaleDateString('fr-FR', {
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric'
+                        })}
+                      </span>
+                    </div>
+                  )}
+
                   <div className="flex items-center space-x-2">
                     <Calendar className="w-4 h-4 text-muted-foreground" />
                     <span>

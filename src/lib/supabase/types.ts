@@ -44,6 +44,13 @@ export type Database = {
             referencedRelation: "admins"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "admins_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "admins_with_users"
+            referencedColumns: ["id"]
+          },
         ]
       }
       bookings: {
@@ -189,6 +196,7 @@ export type Database = {
           hairdresser_id: string
           id: string
           is_available: boolean | null
+          slot_order: number
           start_time: string
         }
         Insert: {
@@ -198,6 +206,7 @@ export type Database = {
           hairdresser_id: string
           id?: string
           is_available?: boolean | null
+          slot_order?: number
           start_time: string
         }
         Update: {
@@ -207,6 +216,7 @@ export type Database = {
           hairdresser_id?: string
           id?: string
           is_available?: boolean | null
+          slot_order?: number
           start_time?: string
         }
         Relationships: [
@@ -271,27 +281,33 @@ export type Database = {
           caption: string | null
           created_at: string | null
           display_order: number | null
+          featured: boolean
           hairdresser_id: string
           id: string
           image_url: string
+          media_type: string | null
           updated_at: string | null
         }
         Insert: {
           caption?: string | null
           created_at?: string | null
           display_order?: number | null
+          featured?: boolean
           hairdresser_id: string
           id?: string
           image_url: string
+          media_type?: string | null
           updated_at?: string | null
         }
         Update: {
           caption?: string | null
           created_at?: string | null
           display_order?: number | null
+          featured?: boolean
           hairdresser_id?: string
           id?: string
           image_url?: string
+          media_type?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -310,24 +326,27 @@ export type Database = {
           duration_minutes: number
           hairdresser_id: string
           id: string
-          price: number
+          price: number | null
           service_name: string
+          service_type: string
         }
         Insert: {
           created_at?: string
           duration_minutes: number
           hairdresser_id: string
           id?: string
-          price: number
+          price?: number | null
           service_name: string
+          service_type?: string
         }
         Update: {
           created_at?: string
           duration_minutes?: number
           hairdresser_id?: string
           id?: string
-          price?: number
+          price?: number | null
           service_name?: string
+          service_type?: string
         }
         Relationships: [
           {
@@ -342,13 +361,16 @@ export type Database = {
       hairdressers: {
         Row: {
           accepts_home_service: boolean | null
+          accepts_salon_service: boolean
           address: string
+          available_now: boolean
+          available_now_end_at: string | null
           avatar_url: string | null
           cover_image_url: string | null
           created_at: string
           description: string | null
-          hourly_rate: number | null
           id: string
+          minimum_interval_time: number
           name: string
           phone: string | null
           rating: number | null
@@ -358,13 +380,16 @@ export type Database = {
         }
         Insert: {
           accepts_home_service?: boolean | null
+          accepts_salon_service?: boolean
           address: string
+          available_now?: boolean
+          available_now_end_at?: string | null
           avatar_url?: string | null
           cover_image_url?: string | null
           created_at?: string
           description?: string | null
-          hourly_rate?: number | null
           id?: string
+          minimum_interval_time?: number
           name: string
           phone?: string | null
           rating?: number | null
@@ -374,13 +399,16 @@ export type Database = {
         }
         Update: {
           accepts_home_service?: boolean | null
+          accepts_salon_service?: boolean
           address?: string
+          available_now?: boolean
+          available_now_end_at?: string | null
           avatar_url?: string | null
           cover_image_url?: string | null
           created_at?: string
           description?: string | null
-          hourly_rate?: number | null
           id?: string
+          minimum_interval_time?: number
           name?: string
           phone?: string | null
           rating?: number | null
@@ -476,6 +504,38 @@ export type Database = {
           },
         ]
       }
+      preferences: {
+        Row: {
+          created_at: string | null
+          favorite_transport_mode: string | null
+          hairdresser_id: string
+          id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          favorite_transport_mode?: string | null
+          hairdresser_id: string
+          id?: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          favorite_transport_mode?: string | null
+          hairdresser_id?: string
+          id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "preferences_hairdresser_id_fkey"
+            columns: ["hairdresser_id"]
+            isOneToOne: true
+            referencedRelation: "hairdressers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reviews: {
         Row: {
           booking_id: string
@@ -563,31 +623,73 @@ export type Database = {
           },
         ]
       }
+      user_favorites: {
+        Row: {
+          created_at: string
+          hairdresser_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          hairdresser_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          hairdresser_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_favorites_hairdresser_id_fkey"
+            columns: ["hairdresser_id"]
+            isOneToOne: false
+            referencedRelation: "hairdressers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_favorites_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           avatar_url: string | null
+          birth_date: string | null
           created_at: string
           email: string
           email_confirmed: boolean | null
           full_name: string | null
+          gender: string | null
           id: string
           phone: string | null
         }
         Insert: {
           avatar_url?: string | null
+          birth_date?: string | null
           created_at?: string
           email: string
           email_confirmed?: boolean | null
           full_name?: string | null
+          gender?: string | null
           id: string
           phone?: string | null
         }
         Update: {
           avatar_url?: string | null
+          birth_date?: string | null
           created_at?: string
           email?: string
           email_confirmed?: boolean | null
           full_name?: string | null
+          gender?: string | null
           id?: string
           phone?: string | null
         }
@@ -600,14 +702,29 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           created_by_email: string | null
-          email: string
+          email: string | null
           full_name: string | null
-          id: string
+          id: string | null
           role: string | null
           user_created_at: string | null
-          user_id: string
+          user_id: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "admins_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "admins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admins_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "admins_with_users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Functions: {
@@ -619,6 +736,7 @@ export type Database = {
         }[]
       }
       cron_update_past_bookings: { Args: never; Returns: undefined }
+      delete_user_account: { Args: never; Returns: undefined }
       get_admin_info: {
         Args: { user_uuid?: string }
         Returns: {

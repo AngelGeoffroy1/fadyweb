@@ -30,10 +30,12 @@ type Booking = Database['public']['Tables']['bookings']['Row'] & {
   user_name?: string
   user_email?: string
   user_phone?: string
+  user_avatar_url?: string | null
   hairdresser_name?: string
   hairdresser_phone?: string
   hairdresser_address?: string
   hairdresser_rating?: number
+  hairdresser_avatar_url?: string | null
   service_name?: string
   duration_minutes?: number
   service_price?: number
@@ -78,8 +80,8 @@ export default function BookingDetailPage() {
         .from('bookings')
         .select(`
           *,
-          users:user_id(full_name, email, phone),
-          hairdressers:hairdresser_id(name, phone, address, rating),
+          users:user_id(full_name, email, phone, avatar_url),
+          hairdressers:hairdresser_id(name, phone, address, rating, avatar_url),
           hairdresser_services:service_id(service_name, duration_minutes, price)
         `)
         .eq('id', bookingId)
@@ -93,10 +95,12 @@ export default function BookingDetailPage() {
         user_name: bookingData.users?.full_name || 'N/A',
         user_email: bookingData.users?.email || 'N/A',
         user_phone: bookingData.users?.phone || null,
+        user_avatar_url: bookingData.users?.avatar_url || null,
         hairdresser_name: bookingData.hairdressers?.name || 'Coiffeur inconnu',
         hairdresser_phone: bookingData.hairdressers?.phone || null,
         hairdresser_address: bookingData.hairdressers?.address || null,
         hairdresser_rating: bookingData.hairdressers?.rating || 0,
+        hairdresser_avatar_url: bookingData.hairdressers?.avatar_url || null,
         service_name: bookingData.hairdresser_services?.service_name || 'Service inconnu',
         duration_minutes: bookingData.hairdresser_services?.duration_minutes || 0,
         service_price: bookingData.hairdresser_services?.price || 0
@@ -374,9 +378,17 @@ export default function BookingDetailPage() {
           <CardContent>
             <div className="flex items-start space-x-6">
               <div className="flex-shrink-0">
-                <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
-                  <User className="h-8 w-8 text-muted-foreground" />
-                </div>
+                {data.booking.user_avatar_url ? (
+                  <img
+                    src={data.booking.user_avatar_url}
+                    alt={data.booking.user_name || 'Avatar'}
+                    className="h-16 w-16 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
+                    <User className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                )}
               </div>
               <div className="flex-1 space-y-3">
                 <div>
@@ -423,9 +435,17 @@ export default function BookingDetailPage() {
           <CardContent>
             <div className="flex items-start space-x-6">
               <div className="flex-shrink-0">
-                <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
-                  <Scissors className="h-8 w-8 text-muted-foreground" />
-                </div>
+                {data.booking.hairdresser_avatar_url ? (
+                  <img
+                    src={data.booking.hairdresser_avatar_url}
+                    alt={data.booking.hairdresser_name || 'Avatar'}
+                    className="h-16 w-16 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
+                    <Scissors className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                )}
               </div>
               <div className="flex-1 space-y-3">
                 <div>

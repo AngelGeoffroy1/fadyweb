@@ -11,6 +11,7 @@ import { LogOut, Users, Scissors, FileCheck, Settings, Menu, ChevronLeft, Calend
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
+import { ThemeToggle } from '@/components/ui/theme-toggle'
 
 export default function DashboardLayout({
   children,
@@ -249,6 +250,13 @@ export default function DashboardLayout({
         transition={{ duration: 0.3, ease: "easeInOut" }}
         className="min-h-screen"
       >
+        {/* Header avec bouton de thème */}
+        <div className="sticky top-0 z-30 bg-background/80 backdrop-blur-sm border-b border-border">
+          <div className="flex items-center justify-end p-4">
+            <ThemeToggle />
+          </div>
+        </div>
+        
         <main className="p-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}

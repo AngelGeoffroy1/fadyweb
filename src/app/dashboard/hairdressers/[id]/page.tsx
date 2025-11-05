@@ -104,6 +104,7 @@ export default function HairdresserDetailPage() {
         .from('hairdresser_availability')
         .select('*')
         .eq('hairdresser_id', hairdresserId)
+        .order('slot_order', { ascending: true })
         .order('day_of_week', { ascending: true })
 
       if (availabilityError) throw availabilityError
@@ -381,17 +382,47 @@ export default function HairdresserDetailPage() {
                       </div>
                     )}
 
-                    {data.hairdresser.hourly_rate && (
-                      <div className="flex items-center space-x-2">
-                        <Euro className="w-4 h-4 text-muted-foreground" />
-                        <span>{data.hairdresser.hourly_rate}€/h</span>
-                      </div>
-                    )}
+                    <div className="flex items-center space-x-2">
+                      <Home className="w-4 h-4 text-muted-foreground" />
+                      <span>
+                        {data.hairdresser.accepts_home_service ? 'Accepte les services à domicile' : 'Services à domicile non disponibles'}
+                      </span>
+                    </div>
 
                     <div className="flex items-center space-x-2">
                       <Home className="w-4 h-4 text-muted-foreground" />
                       <span>
-                        {data.hairdresser.accepts_home_service ? 'Accepte les services à domicile' : 'Services en salon uniquement'}
+                        {data.hairdresser.accepts_salon_service ? 'Accepte les services en salon' : 'Services en salon non disponibles'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <Clock className="w-4 h-4 text-muted-foreground" />
+                      <span>
+                        Disponible maintenant: {data.hairdresser.available_now ? (
+                          <Badge variant="default" className="bg-green-100 text-green-800 ml-2">Oui</Badge>
+                        ) : (
+                          <Badge variant="secondary" className="ml-2">Non</Badge>
+                        )}
+                      </span>
+                    </div>
+
+                    {data.hairdresser.available_now_end_at && (
+                      <div className="flex items-center space-x-2">
+                        <Clock className="w-4 h-4 text-muted-foreground" />
+                        <span>
+                          Disponible jusqu'à: {new Date(data.hairdresser.available_now_end_at).toLocaleTimeString('fr-FR', {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center space-x-2">
+                      <Clock className="w-4 h-4 text-muted-foreground" />
+                      <span>
+                        Intervalle minimum: {data.hairdresser.minimum_interval_time} minutes
                       </span>
                     </div>
                   </div>
@@ -421,6 +452,7 @@ export default function HairdresserDetailPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Service</TableHead>
+                    <TableHead>Type</TableHead>
                     <TableHead>Durée</TableHead>
                     <TableHead>Prix</TableHead>
                   </TableRow>
@@ -430,6 +462,9 @@ export default function HairdresserDetailPage() {
                     <TableRow key={service.id}>
                       <TableCell className="font-medium">{service.service_name}</TableCell>
                       <TableCell>
+                        <Badge variant="outline">{service.service_type}</Badge>
+                      </TableCell>
+                      <TableCell>
                         <div className="flex items-center space-x-2">
                           <Clock className="w-4 h-4 text-muted-foreground" />
                           <span>{service.duration_minutes} min</span>
@@ -438,7 +473,7 @@ export default function HairdresserDetailPage() {
                       <TableCell>
                         <div className="flex items-center space-x-2">
                           <Euro className="w-4 h-4 text-muted-foreground" />
-                          <span className="font-medium">{service.price}€</span>
+                          <span className="font-medium">{service.price || 'N/A'}€</span>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -473,6 +508,7 @@ export default function HairdresserDetailPage() {
                     <TableHead>Jour</TableHead>
                     <TableHead>Heure de début</TableHead>
                     <TableHead>Heure de fin</TableHead>
+                    <TableHead>Ordre</TableHead>
                     <TableHead>Disponible</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -482,6 +518,9 @@ export default function HairdresserDetailPage() {
                       <TableCell className="font-medium">{getDayName(slot.day_of_week)}</TableCell>
                       <TableCell>{slot.start_time}</TableCell>
                       <TableCell>{slot.end_time}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{slot.slot_order}</Badge>
+                      </TableCell>
                       <TableCell>
                         <Badge variant={slot.is_available ? "default" : "secondary"}>
                           {slot.is_available ? 'Disponible' : 'Indisponible'}
@@ -508,27 +547,49 @@ export default function HairdresserDetailPage() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <ImageIcon className="w-5 h-5" />
-              <span>Galerie photos ({data.gallery.length})</span>
+              <span>Galerie médias ({data.gallery.length})</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
             {data.gallery.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {data.gallery.map((image) => (
-                  <div key={image.id} className="space-y-2">
-                    <img
-                      src={image.image_url}
-                      alt={image.caption || 'Image de la galerie'}
-                      className="w-full h-48 object-cover rounded-lg"
-                    />
-                    {image.caption && (
-                      <p className="text-sm text-muted-foreground">{image.caption}</p>
+                {data.gallery.map((media) => (
+                  <div key={media.id} className="space-y-2">
+                    <div className="relative">
+                      {media.media_type === 'video' ? (
+                        <video
+                          src={media.image_url}
+                          controls
+                          className="w-full h-48 object-cover rounded-lg"
+                        >
+                          Votre navigateur ne supporte pas la lecture de vidéos.
+                        </video>
+                      ) : (
+                        <img
+                          src={media.image_url}
+                          alt={media.caption || 'Image de la galerie'}
+                          className="w-full h-48 object-cover rounded-lg"
+                        />
+                      )}
+                      {media.featured && (
+                        <Badge className="absolute top-2 right-2 bg-yellow-500 text-white">
+                          En vedette
+                        </Badge>
+                      )}
+                      {media.media_type && (
+                        <Badge variant="outline" className="absolute top-2 left-2">
+                          {media.media_type === 'video' ? 'Vidéo' : 'Image'}
+                        </Badge>
+                      )}
+                    </div>
+                    {media.caption && (
+                      <p className="text-sm text-muted-foreground">{media.caption}</p>
                     )}
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-muted-foreground text-center py-4">Aucune photo dans la galerie</p>
+              <p className="text-muted-foreground text-center py-4">Aucun média dans la galerie</p>
             )}
           </CardContent>
         </Card>

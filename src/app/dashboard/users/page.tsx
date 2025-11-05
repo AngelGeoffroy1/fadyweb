@@ -111,6 +111,8 @@ export default function UsersPage() {
                   <TableHead>Email</TableHead>
                   <TableHead>Nom complet</TableHead>
                   <TableHead>Téléphone</TableHead>
+                  <TableHead>Genre</TableHead>
+                  <TableHead>Date de naissance</TableHead>
                   <TableHead>Email confirmé</TableHead>
                   <TableHead>Date d'inscription</TableHead>
                   <TableHead>Actions</TableHead>
@@ -138,6 +140,25 @@ export default function UsersPage() {
                           <Phone className="w-4 h-4 text-muted-foreground" />
                           <span>{user.phone}</span>
                         </div>
+                      ) : (
+                        'N/A'
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {user.gender ? (
+                        <Badge variant="outline">
+                          {user.gender === 'homme' ? 'Homme' : 
+                           user.gender === 'femme' ? 'Femme' : 
+                           user.gender === 'autre' ? 'Autre' : 
+                           'Non spécifié'}
+                        </Badge>
+                      ) : (
+                        'N/A'
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {user.birth_date ? (
+                        <span>{new Date(user.birth_date).toLocaleDateString('fr-FR')}</span>
                       ) : (
                         'N/A'
                       )}

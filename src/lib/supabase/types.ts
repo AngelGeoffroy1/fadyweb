@@ -53,6 +53,35 @@ export type Database = {
           },
         ]
       }
+      chat_banned_words: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          word: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          word: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          word?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_banned_words_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bookings: {
         Row: {
           address: string | null

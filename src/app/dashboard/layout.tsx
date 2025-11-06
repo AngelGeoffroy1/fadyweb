@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
-import { LogOut, Users, Scissors, FileCheck, Settings, Menu, ChevronLeft, Calendar } from 'lucide-react'
+import { LogOut, Users, Scissors, FileCheck, Settings, Menu, ChevronLeft, Calendar, Shield } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
@@ -87,6 +87,7 @@ export default function DashboardLayout({
     { name: 'Coiffeurs', href: '/dashboard/hairdressers', icon: Scissors },
     { name: 'Réservations', href: '/dashboard/bookings', icon: Calendar },
     { name: 'Diplômes', href: '/dashboard/diplomas', icon: FileCheck },
+    { name: 'Modération', href: '/dashboard/moderation', icon: Shield },
     { name: 'Administrateurs', href: '/dashboard/admins', icon: Settings },
   ]
 

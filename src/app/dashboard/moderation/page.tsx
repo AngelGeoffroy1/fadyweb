@@ -92,7 +92,7 @@ export default function ModerationPage() {
 
       const { data, error } = await supabase
         .from('chat_banned_words')
-        .insert(payload, { onConflict: 'word', ignoreDuplicates: true })
+        .upsert(payload, { onConflict: 'word', ignoreDuplicates: true })
         .select('word')
 
       if (error) {

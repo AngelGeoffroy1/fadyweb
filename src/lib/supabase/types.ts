@@ -53,35 +53,6 @@ export type Database = {
           },
         ]
       }
-      chat_banned_words: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          id: string
-          word: string
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          word: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          word?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "chat_banned_words_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       bookings: {
         Row: {
           address: string | null
@@ -91,8 +62,11 @@ export type Database = {
           hairdresser_id: string
           id: string
           location_type: string
+          number_of_cuts: number
+          payment_method: string | null
           service_id: string
           status: string | null
+          stripe_payment_intent_id: string | null
           total_price: number
           user_id: string
         }
@@ -104,8 +78,11 @@ export type Database = {
           hairdresser_id: string
           id?: string
           location_type: string
+          number_of_cuts?: number
+          payment_method?: string | null
           service_id: string
           status?: string | null
+          stripe_payment_intent_id?: string | null
           total_price: number
           user_id: string
         }
@@ -117,8 +94,11 @@ export type Database = {
           hairdresser_id?: string
           id?: string
           location_type?: string
+          number_of_cuts?: number
+          payment_method?: string | null
           service_id?: string
           status?: string | null
+          stripe_payment_intent_id?: string | null
           total_price?: number
           user_id?: string
         }
@@ -145,6 +125,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      chat_banned_words: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          word: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          word: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          word?: string
+        }
+        Relationships: []
       }
       conversations: {
         Row: {
@@ -349,6 +350,47 @@ export type Database = {
           },
         ]
       }
+      hairdresser_schedule_exceptions: {
+        Row: {
+          created_at: string | null
+          end_time: string | null
+          exception_date: string
+          exception_type: string
+          hairdresser_id: string
+          id: string
+          slot_order: number | null
+          start_time: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          end_time?: string | null
+          exception_date: string
+          exception_type: string
+          hairdresser_id: string
+          id?: string
+          slot_order?: number | null
+          start_time?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          end_time?: string | null
+          exception_date?: string
+          exception_type?: string
+          hairdresser_id?: string
+          id?: string
+          slot_order?: number | null
+          start_time?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hairdresser_schedule_exceptions_hairdresser_id_fkey"
+            columns: ["hairdresser_id"]
+            isOneToOne: false
+            referencedRelation: "hairdressers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hairdresser_services: {
         Row: {
           created_at: string
@@ -380,6 +422,103 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "hairdresser_services_hairdresser_id_fkey"
+            columns: ["hairdresser_id"]
+            isOneToOne: false
+            referencedRelation: "hairdressers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hairdresser_stripe_accounts: {
+        Row: {
+          charges_enabled: boolean | null
+          created_at: string
+          hairdresser_id: string
+          id: string
+          onboarding_link: string | null
+          onboarding_status: string
+          payouts_enabled: boolean | null
+          stripe_account_id: string
+          updated_at: string
+        }
+        Insert: {
+          charges_enabled?: boolean | null
+          created_at?: string
+          hairdresser_id: string
+          id?: string
+          onboarding_link?: string | null
+          onboarding_status?: string
+          payouts_enabled?: boolean | null
+          stripe_account_id: string
+          updated_at?: string
+        }
+        Update: {
+          charges_enabled?: boolean | null
+          created_at?: string
+          hairdresser_id?: string
+          id?: string
+          onboarding_link?: string | null
+          onboarding_status?: string
+          payouts_enabled?: boolean | null
+          stripe_account_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hairdresser_stripe_accounts_hairdresser_id_fkey"
+            columns: ["hairdresser_id"]
+            isOneToOne: true
+            referencedRelation: "hairdressers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hairdresser_subscriptions: {
+        Row: {
+          cancel_at_period_end: boolean | null
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          hairdresser_id: string
+          id: string
+          status: string
+          stripe_customer_id: string | null
+          stripe_price_id: string | null
+          stripe_subscription_id: string | null
+          subscription_type: string
+          updated_at: string
+        }
+        Insert: {
+          cancel_at_period_end?: boolean | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          hairdresser_id: string
+          id?: string
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_price_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_type: string
+          updated_at?: string
+        }
+        Update: {
+          cancel_at_period_end?: boolean | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          hairdresser_id?: string
+          id?: string
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_price_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hairdresser_subscriptions_hairdresser_id_fkey"
             columns: ["hairdresser_id"]
             isOneToOne: false
             referencedRelation: "hairdressers"
@@ -565,6 +704,45 @@ export type Database = {
           },
         ]
       }
+      profile_views: {
+        Row: {
+          client_id: string
+          hairdresser_id: string
+          id: string
+          viewed_at: string | null
+          year_month: string
+        }
+        Insert: {
+          client_id: string
+          hairdresser_id: string
+          id?: string
+          viewed_at?: string | null
+          year_month: string
+        }
+        Update: {
+          client_id?: string
+          hairdresser_id?: string
+          id?: string
+          viewed_at?: string | null
+          year_month?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_views_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profile_views_hairdresser_id_fkey"
+            columns: ["hairdresser_id"]
+            isOneToOne: false
+            referencedRelation: "hairdressers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reviews: {
         Row: {
           booking_id: string
@@ -616,6 +794,81 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      stripe_payments: {
+        Row: {
+          amount: number
+          booking_id: string | null
+          created_at: string
+          currency: string | null
+          hairdresser_id: string
+          id: string
+          payment_type: string
+          status: string
+          stripe_payment_intent_id: string | null
+        }
+        Insert: {
+          amount: number
+          booking_id?: string | null
+          created_at?: string
+          currency?: string | null
+          hairdresser_id: string
+          id?: string
+          payment_type: string
+          status?: string
+          stripe_payment_intent_id?: string | null
+        }
+        Update: {
+          amount?: number
+          booking_id?: string | null
+          created_at?: string
+          currency?: string | null
+          hairdresser_id?: string
+          id?: string
+          payment_type?: string
+          status?: string
+          stripe_payment_intent_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stripe_payments_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stripe_payments_hairdresser_id_fkey"
+            columns: ["hairdresser_id"]
+            isOneToOne: false
+            referencedRelation: "hairdressers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subscription_fees: {
+        Row: {
+          commission_percentage: number
+          created_at: string
+          id: string
+          subscription_type: string
+          updated_at: string
+        }
+        Insert: {
+          commission_percentage: number
+          created_at?: string
+          id?: string
+          subscription_type: string
+          updated_at?: string
+        }
+        Update: {
+          commission_percentage?: number
+          created_at?: string
+          id?: string
+          subscription_type?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       user_device_tokens: {
         Row: {
@@ -764,8 +1017,8 @@ export type Database = {
           total_reviews: number
         }[]
       }
-      cron_update_past_bookings: { Args: never; Returns: undefined }
-      delete_user_account: { Args: never; Returns: undefined }
+      cron_update_past_bookings: { Args: Record<PropertyKey, never>; Returns: undefined }
+      delete_user_account: { Args: Record<PropertyKey, never>; Returns: undefined }
       get_admin_info: {
         Args: { user_uuid?: string }
         Returns: {
@@ -803,8 +1056,8 @@ export type Database = {
         Args: { p_hairdresser_id: string }
         Returns: undefined
       }
-      update_past_bookings: { Args: never; Returns: undefined }
-      update_past_bookings_manual: { Args: never; Returns: undefined }
+      update_past_bookings: { Args: Record<PropertyKey, never>; Returns: undefined }
+      update_past_bookings_manual: { Args: Record<PropertyKey, never>; Returns: undefined }
     }
     Enums: {
       [_ in never]: never

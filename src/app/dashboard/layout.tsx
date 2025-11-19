@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
-import { LogOut, Users, Scissors, FileCheck, Settings, Menu, ChevronLeft, Calendar, Shield, CreditCard, Wallet } from 'lucide-react'
+import { LogOut, Users, Scissors, FileCheck, Settings, Menu, ChevronLeft, Calendar, Shield, CreditCard, Wallet, MessageSquare } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
@@ -90,6 +90,7 @@ export default function DashboardLayout({
     { name: 'Stripe Connect', href: '/dashboard/stripe-payments', icon: Wallet },
     { name: 'Diplômes', href: '/dashboard/diplomas', icon: FileCheck },
     { name: 'Modération', href: '/dashboard/moderation', icon: Shield },
+    { name: 'Support Tickets', href: '/dashboard/support-tickets', icon: MessageSquare },
     { name: 'Administrateurs', href: '/dashboard/admins', icon: Settings },
   ]
 

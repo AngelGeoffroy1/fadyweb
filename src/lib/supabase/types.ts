@@ -674,24 +674,33 @@ export type Database = {
       }
       preferences: {
         Row: {
+          accept_cash_payment: boolean
           created_at: string | null
           favorite_transport_mode: string | null
           hairdresser_id: string
           id: string
+          minimum_travel_fee: number | null
+          travel_hourly_rate: number | null
           updated_at: string | null
         }
         Insert: {
+          accept_cash_payment?: boolean
           created_at?: string | null
           favorite_transport_mode?: string | null
           hairdresser_id: string
           id?: string
+          minimum_travel_fee?: number | null
+          travel_hourly_rate?: number | null
           updated_at?: string | null
         }
         Update: {
+          accept_cash_payment?: boolean
           created_at?: string | null
           favorite_transport_mode?: string | null
           hairdresser_id?: string
           id?: string
+          minimum_travel_fee?: number | null
+          travel_hourly_rate?: number | null
           updated_at?: string | null
         }
         Relationships: [
@@ -870,6 +879,56 @@ export type Database = {
         }
         Relationships: []
       }
+      support_tickets: {
+        Row: {
+          admin_response: string | null
+          booking_id: string
+          category: string
+          created_at: string | null
+          email: string
+          id: string
+          message: string
+          phone: string
+          status: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          admin_response?: string | null
+          booking_id: string
+          category: string
+          created_at?: string | null
+          email: string
+          id?: string
+          message: string
+          phone: string
+          status?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          admin_response?: string | null
+          booking_id?: string
+          category?: string
+          created_at?: string | null
+          email?: string
+          id?: string
+          message?: string
+          phone?: string
+          status?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_tickets_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_device_tokens: {
         Row: {
           created_at: string | null
@@ -1029,6 +1088,10 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_current_booking_status: {
+        Args: { booking_id_param: string }
+        Returns: string
+      }
       get_reviews_with_users: {
         Args: { p_hairdresser_id: string }
         Returns: {
@@ -1052,6 +1115,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      update_bookings_in_progress_status: { Args: Record<PropertyKey, never>; Returns: undefined }
       update_hairdresser_stats: {
         Args: { p_hairdresser_id: string }
         Returns: undefined

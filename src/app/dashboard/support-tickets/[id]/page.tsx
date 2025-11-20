@@ -9,9 +9,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { motion } from 'framer-motion'
-import { ArrowLeft, MessageSquare, User, Calendar, Mail, Phone, MapPin, CreditCard, Scissors, CheckCircle, XCircle } from 'lucide-react'
+import { ArrowLeft, MessageSquare, User, Calendar, Mail, Phone, MapPin, CreditCard, Scissors, CheckCircle, XCircle, RefreshCcw } from 'lucide-react'
 import { Database } from '@/lib/supabase/types'
 import { toast } from 'sonner'
+import { RefundDialog } from '@/components/refund-dialog'
 
 type SupportTicket = Database['public']['Tables']['support_tickets']['Row'] & {
   bookings?: {
@@ -22,6 +23,7 @@ type SupportTicket = Database['public']['Tables']['support_tickets']['Row'] & {
     location_type: string
     address: string | null
     status: string
+    payment_method: string
     hairdressers?: {
       id: string
       name: string
@@ -34,6 +36,12 @@ type SupportTicket = Database['public']['Tables']['support_tickets']['Row'] & {
       price: number | null
     } | null
   } | null
+  hairdresser_subscription?: {
+    subscription_type: string
+  } | null
+  subscription_fee?: {
+    commission_percentage: number
+  } | null
 }
 
 export default function SupportTicketDetailPage() {
@@ -45,6 +53,7 @@ export default function SupportTicketDetailPage() {
   const [adminResponse, setAdminResponse] = useState('')
   const [selectedStatus, setSelectedStatus] = useState<string>('')
   const [submitting, setSubmitting] = useState(false)
+  const [refundDialogOpen, setRefundDialogOpen] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
@@ -67,6 +76,7 @@ export default function SupportTicketDetailPage() {
             location_type,
             address,
             status,
+            payment_method,
             hairdressers:hairdresser_id (
               id,
               name,
@@ -85,9 +95,38 @@ export default function SupportTicketDetailPage() {
 
       if (error) throw error
 
-      setTicket(data)
-      setAdminResponse(data.admin_response || '')
-      setSelectedStatus(data.status)
+      // Récupérer la subscription du coiffeur si une réservation existe
+      let enrichedData = data
+      if (data.bookings?.hairdressers?.id) {
+        const { data: subscriptionData } = await supabase
+          .from('hairdresser_subscriptions')
+          .select(`
+            subscription_type
+          `)
+          .eq('hairdresser_id', data.bookings.hairdressers.id)
+          .single()
+
+        if (subscriptionData) {
+          // Récupérer les frais de commission pour ce type de subscription
+          const { data: feeData } = await supabase
+            .from('subscription_fees')
+            .select(`
+              commission_percentage
+            `)
+            .eq('subscription_type', subscriptionData.subscription_type)
+            .single()
+
+          enrichedData = {
+            ...data,
+            hairdresser_subscription: subscriptionData,
+            subscription_fee: feeData
+          }
+        }
+      }
+
+      setTicket(enrichedData)
+      setAdminResponse(enrichedData.admin_response || '')
+      setSelectedStatus(enrichedData.status)
     } catch (error) {
       console.error('Erreur lors du chargement du ticket:', error)
       toast.error('Impossible de charger le ticket')
@@ -145,6 +184,44 @@ export default function SupportTicketDetailPage() {
       case 'closed': return 'Fermé'
       default: return status
     }
+  }
+
+  const getPaymentMethodLabel = (paymentMethod: string) => {
+    switch (paymentMethod) {
+      case 'card': return 'Carte Bancaire'
+      case 'cash': return 'Cash'
+      default: return 'N/A'
+    }
+  }
+
+  const calculatePricing = () => {
+    if (!ticket?.bookings) return null
+
+    const totalPrice = ticket.bookings.total_price
+    const commissionPercentage = ticket.subscription_fee?.commission_percentage || 0
+    const commission = (totalPrice * commissionPercentage) / 100
+    const netPayout = totalPrice - commission
+
+    return {
+      totalPrice,
+      commissionPercentage,
+      commission,
+      netPayout
+    }
+  }
+
+  const handleRefundSuccess = () => {
+    toast.success('Remboursement effectué avec succès')
+    fetchTicketDetails() // Rafraîchir les données
+  }
+
+  const canRefund = () => {
+    if (!ticket?.bookings) return false
+    return (
+      ticket.bookings.payment_method === 'card' &&
+      ticket.bookings.status !== 'refund' &&
+      ticket.bookings.status !== 'cancelled'
+    )
   }
 
   if (loading) {
@@ -315,6 +392,16 @@ export default function SupportTicketDetailPage() {
                     <div className="flex items-start space-x-3">
                       <CreditCard className="w-5 h-5 text-muted-foreground mt-0.5" />
                       <div>
+                        <p className="text-sm text-muted-foreground">Moyen de paiement</p>
+                        <Badge variant="outline">
+                          {getPaymentMethodLabel(ticket.bookings.payment_method)}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start space-x-3">
+                      <CreditCard className="w-5 h-5 text-muted-foreground mt-0.5" />
+                      <div>
                         <p className="text-sm text-muted-foreground">Prix total</p>
                         <p className="font-medium">{ticket.bookings.total_price} €</p>
                       </div>
@@ -341,6 +428,101 @@ export default function SupportTicketDetailPage() {
                       </div>
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {/* Détails financiers */}
+          {ticket.bookings && calculatePricing() && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <CreditCard className="w-5 h-5" />
+                    <span>Détails financiers</span>
+                  </CardTitle>
+                  <CardDescription>
+                    Répartition des montants et commission Fady
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center py-2 border-b">
+                      <span className="text-sm text-muted-foreground">Prix total de la réservation</span>
+                      <span className="font-semibold text-lg">{calculatePricing()?.totalPrice.toFixed(2)} €</span>
+                    </div>
+
+                    <div className="flex justify-between items-center py-2">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Commission Fady</p>
+                        {ticket.hairdresser_subscription && (
+                          <p className="text-xs text-muted-foreground">
+                            Abonnement: <Badge variant="outline" className="text-xs">{ticket.hairdresser_subscription.subscription_type}</Badge>
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium text-red-600">
+                          - {calculatePricing()?.commission.toFixed(2)} €
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          ({calculatePricing()?.commissionPercentage}%)
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center py-3 border-t-2 bg-green-50 dark:bg-green-950 px-3 rounded-lg">
+                      <span className="font-semibold">Payout net pour le coiffeur</span>
+                      <span className="font-bold text-xl text-green-600">
+                        {calculatePricing()?.netPayout.toFixed(2)} €
+                      </span>
+                    </div>
+                  </div>
+
+                  {!ticket.subscription_fee && (
+                    <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                      <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                        ⚠️ Aucune commission configurée pour ce type d'abonnement
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Badge si remboursé */}
+                  {ticket.bookings.status === 'refund' && (
+                    <div className="mt-4 p-3 bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 rounded-lg flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <RefreshCcw className="w-5 h-5 text-orange-600" />
+                        <p className="text-sm font-medium text-orange-800 dark:text-orange-200">
+                          Cette réservation a été remboursée
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-300">
+                        Remboursé
+                      </Badge>
+                    </div>
+                  )}
+
+                  {/* Bouton de remboursement */}
+                  {canRefund() && (
+                    <div className="mt-6 pt-4 border-t">
+                      <Button
+                        onClick={() => setRefundDialogOpen(true)}
+                        variant="destructive"
+                        className="w-full"
+                      >
+                        <RefreshCcw className="w-4 h-4 mr-2" />
+                        Rembourser le paiement
+                      </Button>
+                      <p className="text-xs text-muted-foreground text-center mt-2">
+                        Cette action créera un remboursement via Stripe Connect
+                      </p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </motion.div>
@@ -416,6 +598,19 @@ export default function SupportTicketDetailPage() {
           </motion.div>
         </div>
       </div>
+
+      {/* Modal de remboursement */}
+      {ticket?.bookings && calculatePricing() && (
+        <RefundDialog
+          open={refundDialogOpen}
+          onOpenChange={setRefundDialogOpen}
+          bookingId={ticket.bookings.id}
+          totalAmount={calculatePricing()!.totalPrice}
+          commission={calculatePricing()!.commission}
+          commissionPercentage={calculatePricing()!.commissionPercentage}
+          onRefundSuccess={handleRefundSuccess}
+        />
+      )}
     </div>
   )
 }

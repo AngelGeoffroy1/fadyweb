@@ -18,6 +18,7 @@ type SupportTicket = Database['public']['Tables']['support_tickets']['Row'] & {
   user_email?: string
   hairdresser_name?: string
   service_name?: string
+  payment_method?: string
 }
 
 export default function SupportTicketsPage() {
@@ -46,6 +47,7 @@ export default function SupportTicketsPage() {
           *,
           bookings:booking_id (
             id,
+            payment_method,
             hairdressers:hairdresser_id (name),
             hairdresser_services:service_id (service_name)
           )
@@ -58,7 +60,8 @@ export default function SupportTicketsPage() {
         ...ticket,
         user_email: ticket.email || 'N/A',
         hairdresser_name: ticket.bookings?.hairdressers?.name || 'N/A',
-        service_name: ticket.bookings?.hairdresser_services?.service_name || 'N/A'
+        service_name: ticket.bookings?.hairdresser_services?.service_name || 'N/A',
+        payment_method: ticket.bookings?.payment_method || 'N/A'
       }))
 
       setTickets(transformedTickets)
@@ -119,6 +122,14 @@ export default function SupportTicketsPage() {
   const getCategoryLabel = (category: string | null) => {
     if (!category) return 'N/A'
     return category
+  }
+
+  const getPaymentMethodLabel = (paymentMethod: string | null) => {
+    switch (paymentMethod) {
+      case 'card': return 'CB'
+      case 'cash': return 'Cash'
+      default: return 'N/A'
+    }
   }
 
   const getTicketCountByStatus = (status: string) => {
@@ -268,6 +279,7 @@ export default function SupportTicketsPage() {
                   <TableHead>Téléphone</TableHead>
                   <TableHead>Catégorie</TableHead>
                   <TableHead>Statut</TableHead>
+                  <TableHead>Moyen de paiement</TableHead>
                   <TableHead>Coiffeur</TableHead>
                   <TableHead>Date création</TableHead>
                   <TableHead>Actions</TableHead>
@@ -296,6 +308,11 @@ export default function SupportTicketsPage() {
                     <TableCell>
                       <Badge className={getStatusColor(ticket.status)}>
                         {getStatusLabel(ticket.status)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {getPaymentMethodLabel(ticket.payment_method || null)}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">

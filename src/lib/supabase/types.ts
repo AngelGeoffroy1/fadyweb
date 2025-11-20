@@ -752,6 +752,79 @@ export type Database = {
           },
         ]
       }
+      refunds: {
+        Row: {
+          admin_id: string | null
+          amount: number
+          booking_id: string
+          commission_handling: string
+          created_at: string
+          hairdresser_amount_reversed: number
+          id: string
+          payment_intent_id: string
+          platform_amount_kept: number
+          reason: string | null
+          refund_type: string
+          status: string
+          stripe_refund_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          admin_id?: string | null
+          amount: number
+          booking_id: string
+          commission_handling: string
+          created_at?: string
+          hairdresser_amount_reversed?: number
+          id?: string
+          payment_intent_id: string
+          platform_amount_kept?: number
+          reason?: string | null
+          refund_type: string
+          status?: string
+          stripe_refund_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          admin_id?: string | null
+          amount?: number
+          booking_id?: string
+          commission_handling?: string
+          created_at?: string
+          hairdresser_amount_reversed?: number
+          id?: string
+          payment_intent_id?: string
+          platform_amount_kept?: number
+          reason?: string | null
+          refund_type?: string
+          status?: string
+          stripe_refund_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "refunds_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "admins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refunds_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "admins_with_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refunds_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reviews: {
         Row: {
           booking_id: string

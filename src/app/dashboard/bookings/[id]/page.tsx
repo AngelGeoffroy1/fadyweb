@@ -173,14 +173,16 @@ export default function BookingDetailPage() {
         switch (newStatus) {
           case 'confirmed':
             // Notifier le client
-            await sendClientNotification(
-              NotificationTemplates.bookingConfirmedClient(
-                booking.user_id,
-                booking.id,
-                booking.hairdresser_name || 'votre coiffeur',
-                bookingDateTime
+            if (booking.user_id) {
+              await sendClientNotification(
+                NotificationTemplates.bookingConfirmedClient(
+                  booking.user_id,
+                  booking.id,
+                  booking.hairdresser_name || 'votre coiffeur',
+                  bookingDateTime
+                )
               )
-            )
+            }
             // Notifier le coiffeur
             if (booking.hairdresser_user_id) {
               await sendHairdresserNotification(
@@ -197,14 +199,16 @@ export default function BookingDetailPage() {
 
           case 'cancelled':
             // Notifier le client
-            await sendClientNotification(
-              NotificationTemplates.bookingCancelledClient(
-                booking.user_id,
-                booking.id,
-                booking.hairdresser_name || 'votre coiffeur',
-                bookingDateTime
+            if (booking.user_id) {
+              await sendClientNotification(
+                NotificationTemplates.bookingCancelledClient(
+                  booking.user_id,
+                  booking.id,
+                  booking.hairdresser_name || 'votre coiffeur',
+                  bookingDateTime
+                )
               )
-            )
+            }
             // Notifier le coiffeur
             if (booking.hairdresser_user_id) {
               await sendHairdresserNotification(
@@ -221,13 +225,15 @@ export default function BookingDetailPage() {
 
           case 'completed':
             // Notifier le client
-            await sendClientNotification(
-              NotificationTemplates.bookingCompletedClient(
-                booking.user_id,
-                booking.id,
-                booking.hairdresser_name || 'votre coiffeur'
+            if (booking.user_id) {
+              await sendClientNotification(
+                NotificationTemplates.bookingCompletedClient(
+                  booking.user_id,
+                  booking.id,
+                  booking.hairdresser_name || 'votre coiffeur'
+                )
               )
-            )
+            }
             // Notifier le coiffeur
             if (booking.hairdresser_user_id) {
               await sendHairdresserNotification(

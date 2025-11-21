@@ -173,7 +173,7 @@ export default function SupportTicketDetailPage() {
         console.log('📧 Envoi des notifications au user:', ticket.user_id)
         try {
           // Notification pour changement de statut
-          if (statusChanged) {
+          if (statusChanged && ticket.user_id) {
             console.log('📬 Envoi notification changement de statut:', selectedStatus)
             switch (selectedStatus) {
               case 'in_progress':
@@ -202,7 +202,7 @@ export default function SupportTicketDetailPage() {
           }
 
           // Notification pour réponse admin (nouvelle ou modifiée)
-          if (responseChanged) {
+          if (responseChanged && ticket.user_id) {
             console.log('📬 Envoi notification réponse admin')
             const resultResponse = await sendClientNotification(
               NotificationTemplates.adminResponse(ticket.user_id, ticket.id)

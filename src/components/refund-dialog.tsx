@@ -134,7 +134,7 @@ export function RefundDialog({
             hairdresser_id,
             booking_date,
             booking_time,
-            hairdressers:hairdresser_id(user_id)
+            hairdresser:hairdresser_id(user_id)
           `)
           .eq('id', bookingId)
           .single()
@@ -160,10 +160,14 @@ export function RefundDialog({
           console.log('✅ Notification de remboursement envoyée au client')
 
           // Envoyer notification au coiffeur si la commission est affectée
-          if (hairdresserReversed > 0 && bookingData.hairdressers?.user_id) {
+          const hairdresserData = Array.isArray(bookingData.hairdresser)
+            ? bookingData.hairdresser[0]
+            : null
+
+          if (hairdresserReversed > 0 && hairdresserData?.user_id) {
             await sendHairdresserNotification(
               NotificationTemplates.refundProcessedHairdresser(
-                bookingData.hairdressers.user_id,
+                hairdresserData.user_id,
                 bookingData.id,
                 hairdresserReversed,
                 bookingDateTime

@@ -141,11 +141,21 @@ export default function SupportTicketDetailPage() {
 
     setSubmitting(true)
     try {
+
       // Sauvegarder les anciennes valeurs pour détecter les changements
       const oldStatus = ticket.status
       const oldResponse = ticket.admin_response || ''
       const statusChanged = oldStatus !== selectedStatus
       const responseChanged = oldResponse.trim() !== adminResponse.trim() && adminResponse.trim() !== ''
+
+      console.log('📊 Détection des changements:', {
+        statusChanged,
+        responseChanged,
+        oldStatus,
+        newStatus: selectedStatus,
+        hasUserId: !!ticket.user_id,
+        userId: ticket.user_id
+      })
 
       const { error } = await supabase
         .from('support_tickets')
@@ -160,24 +170,32 @@ export default function SupportTicketDetailPage() {
 
       // Envoyer des notifications si le ticket a un user_id
       if (ticket.user_id) {
+        console.log('📧 Envoi des notifications au user:', ticket.user_id)
         try {
           // Notification pour changement de statut
           if (statusChanged) {
+            console.log('📬 Envoi notification changement de statut:', selectedStatus)
             switch (selectedStatus) {
               case 'in_progress':
-                await sendClientNotification(
+                console.log('→ Envoi notification: ticket en cours')
+                const result1 = await sendClientNotification(
                   NotificationTemplates.ticketInProgress(ticket.user_id, ticket.id)
                 )
+                console.log('✅ Résultat notification in_progress:', result1)
                 break
               case 'resolved':
-                await sendClientNotification(
+                console.log('→ Envoi notification: ticket résolu')
+                const result2 = await sendClientNotification(
                   NotificationTemplates.ticketResolved(ticket.user_id, ticket.id)
                 )
+                console.log('✅ Résultat notification resolved:', result2)
                 break
               case 'closed':
-                await sendClientNotification(
+                console.log('→ Envoi notification: ticket fermé')
+                const result3 = await sendClientNotification(
                   NotificationTemplates.ticketClosed(ticket.user_id, ticket.id)
                 )
+                console.log('✅ Résultat notification closed:', result3)
                 break
             }
             console.log('✅ Notification envoyée pour changement de statut du ticket')
@@ -185,15 +203,24 @@ export default function SupportTicketDetailPage() {
 
           // Notification pour réponse admin (nouvelle ou modifiée)
           if (responseChanged) {
-            await sendClientNotification(
+            console.log('📬 Envoi notification réponse admin')
+            const resultResponse = await sendClientNotification(
               NotificationTemplates.adminResponse(ticket.user_id, ticket.id)
             )
+            console.log('✅ Résultat notification admin response:', resultResponse)
             console.log('✅ Notification envoyée pour réponse admin')
+          }
+
+          if (!statusChanged && !responseChanged) {
+            console.log('ℹ️ Aucun changement détecté, pas de notification envoyée')
           }
         } catch (notifError) {
           console.error('❌ Erreur lors de l\'envoi des notifications:', notifError)
+          console.error('❌ Stack trace:', notifError instanceof Error ? notifError.stack : 'N/A')
           // Ne pas bloquer le processus si les notifications échouent
         }
+      } else {
+        console.log('⚠️ Pas de user_id sur le ticket, aucune notification envoyée')
       }
 
       toast.success('Ticket mis à jour avec succès')

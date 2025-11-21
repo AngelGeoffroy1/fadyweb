@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge'
 import { AlertCircle, CreditCard } from 'lucide-react'
 import { createClient } from '@/lib/supabase/browser'
 import { sendClientNotification, sendHairdresserNotification, NotificationTemplates } from '@/lib/notifications'
+import { edgeFunctionUrls } from '@/lib/config'
 
 interface RefundDialogProps {
   open: boolean
@@ -103,8 +104,7 @@ export function RefundDialog({
       }
 
       // Appeler l'Edge Function avec le bon token
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      const response = await fetch(`${supabaseUrl}/functions/v1/refund-payment`, {
+      const response = await fetch(edgeFunctionUrls.refundPayment, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

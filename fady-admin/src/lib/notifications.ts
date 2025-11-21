@@ -4,6 +4,7 @@
  */
 
 import { createClient } from '@/lib/supabase/browser'
+import { edgeFunctionUrls } from '@/lib/config'
 
 interface NotificationData {
   type?: 'booking' | 'ticket' | 'refund' | 'diploma' | 'general';
@@ -35,17 +36,26 @@ interface NotificationResponse {
 export async function sendClientNotification(
   params: SendNotificationParams
 ): Promise<NotificationResponse> {
+  console.log('📲 [sendClientNotification] Début:', {
+    userId: params.userId,
+    title: params.title,
+    url: edgeFunctionUrls.sendPushNotification
+  })
+
   try {
     // Récupérer le token de session de l'admin connecté
     const supabase = createClient()
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
 
     if (sessionError || !session) {
+      console.error('❌ [sendClientNotification] Erreur de session:', sessionError)
       throw new Error('Session expirée, veuillez vous reconnecter')
     }
 
+    console.log('🔑 [sendClientNotification] Session obtenue, appel Edge Function...')
+
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-push-notification`,
+      edgeFunctionUrls.sendPushNotification,
       {
         method: 'POST',
         headers: {
@@ -56,15 +66,22 @@ export async function sendClientNotification(
       }
     );
 
+    console.log('📡 [sendClientNotification] Réponse Edge Function:', {
+      status: response.status,
+      ok: response.ok
+    })
+
     if (!response.ok) {
       const error = await response.json();
-      console.error('Erreur lors de l\'envoi de la notification client:', error);
+      console.error('❌ [sendClientNotification] Erreur réponse:', error);
       throw new Error(error.error || 'Échec de l\'envoi de la notification');
     }
 
-    return await response.json();
+    const result = await response.json();
+    console.log('✅ [sendClientNotification] Succès:', result)
+    return result;
   } catch (error) {
-    console.error('Erreur lors de l\'envoi de la notification client:', error);
+    console.error('❌ [sendClientNotification] Exception:', error);
     throw error;
   }
 }
@@ -75,17 +92,26 @@ export async function sendClientNotification(
 export async function sendHairdresserNotification(
   params: SendNotificationParams
 ): Promise<NotificationResponse> {
+  console.log('💈 [sendHairdresserNotification] Début:', {
+    userId: params.userId,
+    title: params.title,
+    url: edgeFunctionUrls.sendPushNotificationFadyPro
+  })
+
   try {
     // Récupérer le token de session de l'admin connecté
     const supabase = createClient()
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
 
     if (sessionError || !session) {
+      console.error('❌ [sendHairdresserNotification] Erreur de session:', sessionError)
       throw new Error('Session expirée, veuillez vous reconnecter')
     }
 
+    console.log('🔑 [sendHairdresserNotification] Session obtenue, appel Edge Function...')
+
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-push-notification-fady-pro`,
+      edgeFunctionUrls.sendPushNotificationFadyPro,
       {
         method: 'POST',
         headers: {
@@ -96,15 +122,22 @@ export async function sendHairdresserNotification(
       }
     );
 
+    console.log('📡 [sendHairdresserNotification] Réponse Edge Function:', {
+      status: response.status,
+      ok: response.ok
+    })
+
     if (!response.ok) {
       const error = await response.json();
-      console.error('Erreur lors de l\'envoi de la notification coiffeur:', error);
+      console.error('❌ [sendHairdresserNotification] Erreur réponse:', error);
       throw new Error(error.error || 'Échec de l\'envoi de la notification');
     }
 
-    return await response.json();
+    const result = await response.json();
+    console.log('✅ [sendHairdresserNotification] Succès:', result)
+    return result;
   } catch (error) {
-    console.error('Erreur lors de l\'envoi de la notification coiffeur:', error);
+    console.error('❌ [sendHairdresserNotification] Exception:', error);
     throw error;
   }
 }

@@ -37,8 +37,6 @@
     "**/*.mts"
   ],
   "exclude": [
-    "node_modules",
-    "fady-admin",
-    "supabase"
+    "node_modules"
   ]
 }

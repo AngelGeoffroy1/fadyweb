@@ -24,6 +24,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { AlertCircle, CreditCard } from 'lucide-react'
 import { createClient } from '@/lib/supabase/browser'
+import { sendClientNotification, sendHairdresserNotification, NotificationTemplates } from '@/lib/notifications'
+import { edgeFunctionUrls } from '@/lib/config'
 
 interface RefundDialogProps {
   open: boolean
@@ -102,8 +104,7 @@ export function RefundDialog({
       }
 
       // Appeler l'Edge Function avec le bon token
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      const response = await fetch(`${supabaseUrl}/functions/v1/refund-payment`, {
+      const response = await fetch(edgeFunctionUrls.refundPayment, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -121,6 +122,59 @@ export function RefundDialog({
 
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Erreur lors du remboursement')
+      }
+
+      // Récupérer les informations de la réservation pour envoyer les notifications
+      try {
+        const { data: bookingData, error: bookingError } = await supabase
+          .from('bookings')
+          .select(`
+            id,
+            user_id,
+            hairdresser_id,
+            booking_date,
+            booking_time,
+            hairdressers:hairdresser_id(user_id)
+          `)
+          .eq('id', bookingId)
+          .single()
+
+        if (bookingError) {
+          console.error('Erreur lors de la récupération des infos de réservation:', bookingError)
+        } else if (bookingData) {
+          const bookingDate = new Date(bookingData.booking_date).toLocaleDateString('fr-FR', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+          })
+          const bookingDateTime = `${bookingDate} à ${bookingData.booking_time}`
+
+          // Envoyer notification au client
+          await sendClientNotification(
+            NotificationTemplates.refundProcessedClient(
+              bookingData.user_id,
+              bookingData.id,
+              parsedAmount
+            )
+          )
+          console.log('✅ Notification de remboursement envoyée au client')
+
+          // Envoyer notification au coiffeur si la commission est affectée
+          if (hairdresserReversed > 0 && bookingData.hairdressers?.user_id) {
+            await sendHairdresserNotification(
+              NotificationTemplates.refundProcessedHairdresser(
+                bookingData.hairdressers.user_id,
+                bookingData.id,
+                hairdresserReversed,
+                bookingDateTime
+              )
+            )
+            console.log('✅ Notification de remboursement envoyée au coiffeur')
+          }
+        }
+      } catch (notifError) {
+        console.error('❌ Erreur lors de l\'envoi des notifications de remboursement:', notifError)
+        // Ne pas bloquer le processus si les notifications échouent
       }
 
       // Succès

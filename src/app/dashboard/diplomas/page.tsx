@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { motion } from 'framer-motion'
 import { FileCheck, Eye, CheckCircle, XCircle, Search, Filter } from 'lucide-react'
 import { Database } from '@/lib/supabase/types'
+import { sendHairdresserNotification, NotificationTemplates } from '@/lib/notifications'
 
 type DiplomaVerification = Database['public']['Tables']['hairdresser_diploma_verification']['Row'] & {
   hairdresser: Database['public']['Tables']['hairdressers']['Row']
@@ -95,6 +96,17 @@ export default function DiplomasPage() {
           .from('hairdressers')
           .update({ statut: 'Diplomé' })
           .eq('id', diploma.hairdresser_id)
+
+        // Envoyer une notification au coiffeur
+        try {
+          await sendHairdresserNotification(
+            NotificationTemplates.diplomaApproved(diploma.hairdresser.user_id)
+          )
+          console.log('✅ Notification envoyée au coiffeur pour approbation du diplôme')
+        } catch (notifError) {
+          console.error('❌ Erreur lors de l\'envoi de la notification:', notifError)
+          // Ne pas bloquer le processus si la notification échoue
+        }
       }
 
       await fetchDiplomas()
@@ -120,6 +132,20 @@ export default function DiplomasPage() {
         .eq('id', diplomaId)
 
       if (error) throw error
+
+      // Envoyer une notification au coiffeur
+      const diploma = diplomas.find(d => d.id === diplomaId)
+      if (diploma) {
+        try {
+          await sendHairdresserNotification(
+            NotificationTemplates.diplomaRejected(diploma.hairdresser.user_id, rejectionReason)
+          )
+          console.log('✅ Notification envoyée au coiffeur pour rejet du diplôme')
+        } catch (notifError) {
+          console.error('❌ Erreur lors de l\'envoi de la notification:', notifError)
+          // Ne pas bloquer le processus si la notification échoue
+        }
+      }
 
       await fetchDiplomas()
       setSelectedDiploma(null)

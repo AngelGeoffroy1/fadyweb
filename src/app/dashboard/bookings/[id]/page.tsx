@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { Database } from '@/lib/supabase/types'
 import { toast } from 'sonner'
+import { sendClientNotification, sendHairdresserNotification, NotificationTemplates } from '@/lib/notifications'
 
 type Booking = Database['public']['Tables']['bookings']['Row'] & {
   user_name?: string
@@ -36,6 +37,7 @@ type Booking = Database['public']['Tables']['bookings']['Row'] & {
   hairdresser_address?: string
   hairdresser_rating?: number
   hairdresser_avatar_url?: string | null
+  hairdresser_user_id?: string
   service_name?: string
   duration_minutes?: number
   service_price?: number
@@ -81,7 +83,7 @@ export default function BookingDetailPage() {
         .select(`
           *,
           users:user_id(full_name, email, phone, avatar_url),
-          hairdressers:hairdresser_id(name, phone, address, rating, avatar_url),
+          hairdressers:hairdresser_id(name, phone, address, rating, avatar_url, user_id),
           hairdresser_services:service_id(service_name, duration_minutes, price)
         `)
         .eq('id', bookingId)
@@ -101,6 +103,7 @@ export default function BookingDetailPage() {
         hairdresser_address: bookingData.hairdressers?.address || null,
         hairdresser_rating: bookingData.hairdressers?.rating || 0,
         hairdresser_avatar_url: bookingData.hairdressers?.avatar_url || null,
+        hairdresser_user_id: bookingData.hairdressers?.user_id,
         service_name: bookingData.hairdresser_services?.service_name || 'Service inconnu',
         duration_minutes: bookingData.hairdresser_services?.duration_minutes || 0,
         service_price: bookingData.hairdresser_services?.price || 0
@@ -143,7 +146,7 @@ export default function BookingDetailPage() {
 
     try {
       setUpdatingStatus(true)
-      
+
       const { error } = await supabase
         .from('bookings')
         .update({ status: newStatus })
@@ -156,6 +159,97 @@ export default function BookingDetailPage() {
         ...prev,
         booking: prev.booking ? { ...prev.booking, status: newStatus } : null
       }))
+
+      // Envoyer les notifications selon le nouveau statut
+      const booking = data.booking
+      const bookingDate = new Date(booking.booking_date).toLocaleDateString('fr-FR', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      })
+      const bookingDateTime = `${bookingDate} à ${booking.booking_time}`
+
+      try {
+        switch (newStatus) {
+          case 'confirmed':
+            // Notifier le client
+            await sendClientNotification(
+              NotificationTemplates.bookingConfirmedClient(
+                booking.user_id,
+                booking.id,
+                booking.hairdresser_name || 'votre coiffeur',
+                bookingDateTime
+              )
+            )
+            // Notifier le coiffeur
+            if (booking.hairdresser_user_id) {
+              await sendHairdresserNotification(
+                NotificationTemplates.bookingConfirmedHairdresser(
+                  booking.hairdresser_user_id,
+                  booking.id,
+                  booking.user_name || 'un client',
+                  bookingDateTime
+                )
+              )
+            }
+            console.log('✅ Notifications envoyées pour confirmation de réservation')
+            break
+
+          case 'cancelled':
+            // Notifier le client
+            await sendClientNotification(
+              NotificationTemplates.bookingCancelledClient(
+                booking.user_id,
+                booking.id,
+                booking.hairdresser_name || 'votre coiffeur',
+                bookingDateTime
+              )
+            )
+            // Notifier le coiffeur
+            if (booking.hairdresser_user_id) {
+              await sendHairdresserNotification(
+                NotificationTemplates.bookingCancelledHairdresser(
+                  booking.hairdresser_user_id,
+                  booking.id,
+                  booking.user_name || 'un client',
+                  bookingDateTime
+                )
+              )
+            }
+            console.log('✅ Notifications envoyées pour annulation de réservation')
+            break
+
+          case 'completed':
+            // Notifier le client
+            await sendClientNotification(
+              NotificationTemplates.bookingCompletedClient(
+                booking.user_id,
+                booking.id,
+                booking.hairdresser_name || 'votre coiffeur'
+              )
+            )
+            // Notifier le coiffeur
+            if (booking.hairdresser_user_id) {
+              await sendHairdresserNotification(
+                NotificationTemplates.bookingCompletedHairdresser(
+                  booking.hairdresser_user_id,
+                  booking.id,
+                  booking.user_name || 'un client',
+                  bookingDateTime
+                )
+              )
+            }
+            console.log('✅ Notifications envoyées pour réservation terminée')
+            break
+
+          default:
+            // Pas de notification pour les autres statuts (pending, past)
+            break
+        }
+      } catch (notifError) {
+        console.error('❌ Erreur lors de l\'envoi des notifications:', notifError)
+        // Ne pas bloquer le processus si les notifications échouent
+      }
 
       toast.success('Statut de la réservation mis à jour avec succès')
     } catch (error) {

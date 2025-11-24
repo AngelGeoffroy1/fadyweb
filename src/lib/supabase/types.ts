@@ -44,13 +44,6 @@ export type Database = {
             referencedRelation: "admins"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "admins_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "admins_with_users"
-            referencedColumns: ["id"]
-          },
         ]
       }
       bookings: {
@@ -810,13 +803,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "refunds_admin_id_fkey"
-            columns: ["admin_id"]
-            isOneToOne: false
-            referencedRelation: "admins_with_users"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "refunds_booking_id_fkey"
             columns: ["booking_id"]
             isOneToOne: false
@@ -1111,35 +1097,7 @@ export type Database = {
       }
     }
     Views: {
-      admins_with_users: {
-        Row: {
-          created_at: string | null
-          created_by: string | null
-          created_by_email: string | null
-          email: string | null
-          full_name: string | null
-          id: string | null
-          role: string | null
-          user_created_at: string | null
-          user_id: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "admins_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "admins"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "admins_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "admins_with_users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+      [_ in never]: never
     }
     Functions: {
       calculate_hairdresser_rating: {
@@ -1149,8 +1107,8 @@ export type Database = {
           total_reviews: number
         }[]
       }
-      cron_update_past_bookings: { Args: Record<PropertyKey, never>; Returns: undefined }
-      delete_user_account: { Args: Record<PropertyKey, never>; Returns: undefined }
+      cron_update_past_bookings: { Args: never; Returns: undefined }
+      delete_user_account: { Args: never; Returns: undefined }
       get_admin_info: {
         Args: { user_uuid?: string }
         Returns: {
@@ -1158,6 +1116,20 @@ export type Database = {
           created_by: string
           id: string
           role: string
+          user_id: string
+        }[]
+      }
+      get_admins_with_users: {
+        Args: never
+        Returns: {
+          created_at: string
+          created_by: string
+          created_by_email: string
+          email: string
+          full_name: string
+          id: string
+          role: string
+          user_created_at: string
           user_id: string
         }[]
       }
@@ -1188,13 +1160,13 @@ export type Database = {
         }
         Returns: undefined
       }
-      update_bookings_in_progress_status: { Args: Record<PropertyKey, never>; Returns: undefined }
+      update_bookings_in_progress_status: { Args: never; Returns: undefined }
       update_hairdresser_stats: {
         Args: { p_hairdresser_id: string }
         Returns: undefined
       }
-      update_past_bookings: { Args: Record<PropertyKey, never>; Returns: undefined }
-      update_past_bookings_manual: { Args: Record<PropertyKey, never>; Returns: undefined }
+      update_past_bookings: { Args: never; Returns: undefined }
+      update_past_bookings_manual: { Args: never; Returns: undefined }
     }
     Enums: {
       [_ in never]: never

@@ -40,9 +40,7 @@ export default function AdminsPage() {
   const fetchAdmins = async () => {
     try {
       const { data, error } = await supabase
-        .from('admins_with_users')
-        .select('*')
-        .order('created_at', { ascending: false })
+        .rpc('get_admins_with_users')
 
       if (error) throw error
       setAdmins(data || [])

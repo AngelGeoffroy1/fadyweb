@@ -37,7 +37,8 @@ export default function SubscriptionsPage() {
     total_active: 0,
     total_standard: 0,
     total_boost: 0,
-    total_rookie: 0
+    total_rookie: 0,
+    total_ambassador: 0
   })
 
   useEffect(() => {
@@ -124,12 +125,14 @@ export default function SubscriptionsPage() {
     const standard = subscriptions.filter(s => s.subscription_type === 'standard').length
     const boost = subscriptions.filter(s => s.subscription_type === 'boost').length
     const rookie = subscriptions.filter(s => s.subscription_type === 'rookie').length
+    const ambassador = subscriptions.filter(s => s.subscription_type === 'ambassador').length
 
     setStats({
       total_active: active,
       total_standard: standard,
       total_boost: boost,
-      total_rookie: rookie
+      total_rookie: rookie,
+      total_ambassador: ambassador
     })
   }
 
@@ -158,6 +161,8 @@ export default function SubscriptionsPage() {
         return <Badge className="bg-purple-100 text-purple-800">Boost</Badge>
       case 'rookie':
         return <Badge className="bg-blue-100 text-blue-800">Rookie</Badge>
+      case 'ambassador':
+        return <Badge className="bg-yellow-100 text-yellow-800">Ambassadeur</Badge>
       default:
         return <Badge variant="outline">{type}</Badge>
     }
@@ -196,7 +201,7 @@ export default function SubscriptionsPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -252,6 +257,20 @@ export default function SubscriptionsPage() {
             </div>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Ambassadeur
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center space-x-2">
+              <CreditCard className="w-5 h-5 text-yellow-500" />
+              <span className="text-2xl font-bold">{stats.total_ambassador}</span>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Filters */}
@@ -291,6 +310,7 @@ export default function SubscriptionsPage() {
                 <SelectItem value="standard">Standard</SelectItem>
                 <SelectItem value="boost">Boost</SelectItem>
                 <SelectItem value="rookie">Rookie</SelectItem>
+                <SelectItem value="ambassador">Ambassadeur</SelectItem>
               </SelectContent>
             </Select>
           </div>

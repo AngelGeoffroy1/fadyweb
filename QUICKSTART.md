@@ -44,7 +44,7 @@ npm run dev
 ✅ **Liste des coiffeurs** - Gestion avec statistiques  
 ✅ **Authentification sécurisée** - Accès restreint aux admins  
 ✅ **Design moderne** - Interface avec animations Framer Motion  
-✅ **Couleur Fady** - Thème avec #06C270  
+✅ **Couleur Fady** - Thème avec #bd38fc  
 ✅ **Polices Uber Move** - Configuration prête  
 
 ## 🔗 URLs de l'application

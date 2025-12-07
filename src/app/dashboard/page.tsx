@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/browser'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -28,7 +28,7 @@ interface DashboardStats {
   }>
 }
 
-const COLORS = ['#06C270', '#059669', '#047857', '#065F46', '#064E3B']
+const COLORS = ['#bd38fc', '#a020e8', '#8615d4', '#6d0fc0', '#5a0ca3']
 
 // Fonction pour générer les statistiques mensuelles réelles
 async function generateMonthlyStats() {
@@ -85,7 +85,9 @@ async function generateMonthlyStats() {
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
-  const supabase = createClient()
+
+  // Mémoïser le client Supabase pour éviter les re-créations
+  const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -101,7 +103,7 @@ export default function DashboardPage() {
         const totalUsers = usersResult.count || 0
         const totalHairdressers = hairdressersResult.count || 0
         const totalBookings = bookingsResult.count || 0
-        
+
         // Calculer le revenu total des réservations complétées
         const completedBookings = bookingsResult.data?.filter(b => b.status === 'completed') || []
         const totalRevenue = completedBookings.reduce((sum, booking) => sum + booking.total_price, 0)
@@ -140,7 +142,8 @@ export default function DashboardPage() {
     }
 
     fetchStats()
-  }, [supabase])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   if (loading) {
     return (
@@ -166,29 +169,29 @@ export default function DashboardPage() {
       title: 'Utilisateurs',
       value: stats.totalUsers,
       icon: Users,
-      color: 'text-[#06C270]',
-      bgColor: 'bg-[#06C270]/10',
+      color: 'text-[#bd38fc]',
+      bgColor: 'bg-[#bd38fc]/10',
     },
     {
       title: 'Coiffeurs',
       value: stats.totalHairdressers,
       icon: Scissors,
-      color: 'text-[#059669]',
-      bgColor: 'bg-[#059669]/10',
+      color: 'text-[#a020e8]',
+      bgColor: 'bg-[#a020e8]/10',
     },
     {
       title: 'Réservations',
       value: stats.totalBookings,
       icon: Calendar,
-      color: 'text-[#047857]',
-      bgColor: 'bg-[#047857]/10',
+      color: 'text-[#8615d4]',
+      bgColor: 'bg-[#8615d4]/10',
     },
     {
       title: 'Revenus',
       value: `${stats.totalRevenue.toLocaleString()} €`,
       icon: DollarSign,
-      color: 'text-[#065F46]',
-      bgColor: 'bg-[#065F46]/10',
+      color: 'text-[#6d0fc0]',
+      bgColor: 'bg-[#6d0fc0]/10',
     },
   ]
 
@@ -253,10 +256,10 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
-                    <FileCheck className="w-4 h-4 text-[#06C270]" />
+                    <FileCheck className="w-4 h-4 text-[#bd38fc]" />
                     <span>Vérifiés</span>
                   </div>
-                  <Badge variant="default" className="bg-[#06C270] text-white">{stats.verifiedDiplomas}</Badge>
+                  <Badge variant="default" className="bg-[#bd38fc] text-white">{stats.verifiedDiplomas}</Badge>
                 </div>
               </div>
 
@@ -267,10 +270,10 @@ export default function DashboardPage() {
                   <span>{stats.pendingDiplomas + stats.verifiedDiplomas > 0 ? Math.round((stats.verifiedDiplomas / (stats.pendingDiplomas + stats.verifiedDiplomas)) * 100) : 0}%</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-[#06C270] h-2 rounded-full transition-all duration-500" 
-                    style={{ 
-                      width: `${stats.pendingDiplomas + stats.verifiedDiplomas > 0 ? (stats.verifiedDiplomas / (stats.pendingDiplomas + stats.verifiedDiplomas)) * 100 : 0}%` 
+                  <div
+                    className="bg-[#bd38fc] h-2 rounded-full transition-all duration-500"
+                    style={{
+                      width: `${stats.pendingDiplomas + stats.verifiedDiplomas > 0 ? (stats.verifiedDiplomas / (stats.pendingDiplomas + stats.verifiedDiplomas)) * 100 : 0}%`
                     }}
                   />
                 </div>
@@ -280,7 +283,7 @@ export default function DashboardPage() {
               <div className="pt-2 border-t border-gray-100">
                 <div className="grid grid-cols-2 gap-4 text-center">
                   <div>
-                    <div className="text-2xl font-bold text-[#06C270]">{stats.verifiedDiplomas}</div>
+                    <div className="text-2xl font-bold text-[#bd38fc]">{stats.verifiedDiplomas}</div>
                     <div className="text-xs text-muted-foreground">Approuvés</div>
                   </div>
                   <div>
@@ -362,8 +365,8 @@ export default function DashboardPage() {
                   <XAxis dataKey="month" />
                   <YAxis />
                   <Tooltip />
-                  <Line type="monotone" dataKey="users" stroke="#06C270" strokeWidth={3} name="Utilisateurs" />
-                  <Line type="monotone" dataKey="hairdressers" stroke="#059669" strokeWidth={3} name="Coiffeurs" />
+                  <Line type="monotone" dataKey="users" stroke="#bd38fc" strokeWidth={3} name="Utilisateurs" />
+                  <Line type="monotone" dataKey="hairdressers" stroke="#a020e8" strokeWidth={3} name="Coiffeurs" />
                 </LineChart>
               </ResponsiveContainer>
             </CardContent>
@@ -387,7 +390,7 @@ export default function DashboardPage() {
                   <XAxis dataKey="month" />
                   <YAxis />
                   <Tooltip formatter={(value) => [`${value} €`, 'Revenus']} />
-                  <Bar dataKey="revenue" fill="#06C270" />
+                  <Bar dataKey="revenue" fill="#bd38fc" />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>

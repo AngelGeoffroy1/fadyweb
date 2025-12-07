@@ -104,7 +104,7 @@ L'application sera accessible sur [http://localhost:3000](http://localhost:3000)
 
 ## 🎨 Design
 
-- **Couleur principale** : #06C270 (vert Fady)
+- **Couleur principale** : #bd38fc (violet Fady)
 - **Polices** : Uber Move Medium et Bold
 - **Animations** : Micro-interactions avec Framer Motion
 - **Responsive** : Interface adaptative mobile/desktop

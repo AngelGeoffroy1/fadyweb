@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/browser'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { motion } from 'framer-motion'
-import { Users, Search, Mail, Phone, Calendar, Eye } from 'lucide-react'
+import { Users, Search, Mail, Phone, Calendar, Eye, Scissors, User } from 'lucide-react'
 import { Database } from '@/lib/supabase/types'
 import { useRouter } from 'next/navigation'
 
@@ -19,7 +19,9 @@ export default function UsersPage() {
   const [filteredUsers, setFilteredUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
-  const supabase = createClient()
+  const [userTypeFilter, setUserTypeFilter] = useState<'all' | 'hairdresser' | 'client'>('all')
+  const [hairdresserUserIds, setHairdresserUserIds] = useState<Set<string>>(new Set())
+  const supabase = useMemo(() => createClient(), [])
   const router = useRouter()
 
   useEffect(() => {
@@ -28,10 +30,11 @@ export default function UsersPage() {
 
   useEffect(() => {
     filterUsers()
-  }, [users, searchTerm])
+  }, [users, searchTerm, userTypeFilter, hairdresserUserIds])
 
   const fetchUsers = async () => {
     try {
+      // Récupérer les utilisateurs
       const { data, error } = await supabase
         .from('users')
         .select('*')
@@ -39,6 +42,21 @@ export default function UsersPage() {
 
       if (error) throw error
       setUsers(data || [])
+
+      // Récupérer les IDs des coiffeurs
+      const { data: hairdressers, error: hairdressersError } = await supabase
+        .from('hairdressers')
+        .select('user_id')
+
+      if (hairdressersError) throw hairdressersError
+
+      // Créer un Set des user_ids qui sont coiffeurs
+      const hairdresserIds = new Set(
+        hairdressers
+          ?.map(h => h.user_id)
+          .filter((id): id is string => id !== null) || []
+      )
+      setHairdresserUserIds(hairdresserIds)
     } catch (error) {
       console.error('Erreur lors du chargement des utilisateurs:', error)
     } finally {
@@ -49,6 +67,14 @@ export default function UsersPage() {
   const filterUsers = () => {
     let filtered = users
 
+    // Filtre par type d'utilisateur
+    if (userTypeFilter === 'hairdresser') {
+      filtered = filtered.filter(user => hairdresserUserIds.has(user.id))
+    } else if (userTypeFilter === 'client') {
+      filtered = filtered.filter(user => !hairdresserUserIds.has(user.id))
+    }
+
+    // Filtre par recherche
     if (searchTerm) {
       filtered = filtered.filter(user =>
         user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -58,6 +84,10 @@ export default function UsersPage() {
     }
 
     setFilteredUsers(filtered)
+  }
+
+  const isHairdresser = (userId: string) => {
+    return hairdresserUserIds.has(userId)
   }
 
   if (loading) {
@@ -92,6 +122,42 @@ export default function UsersPage() {
         </CardContent>
       </Card>
 
+      {/* Filtres de type d'utilisateur */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-medium text-muted-foreground">Type d'utilisateur:</span>
+            <Button
+              variant={userTypeFilter === 'all' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setUserTypeFilter('all')}
+              className="flex items-center space-x-2"
+            >
+              <Users className="w-4 h-4" />
+              <span>Tous ({users.length})</span>
+            </Button>
+            <Button
+              variant={userTypeFilter === 'hairdresser' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setUserTypeFilter('hairdresser')}
+              className="flex items-center space-x-2"
+            >
+              <Scissors className="w-4 h-4" />
+              <span>Coiffeurs ({users.filter(u => hairdresserUserIds.has(u.id)).length})</span>
+            </Button>
+            <Button
+              variant={userTypeFilter === 'client' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setUserTypeFilter('client')}
+              className="flex items-center space-x-2"
+            >
+              <User className="w-4 h-4" />
+              <span>Clients ({users.filter(u => !hairdresserUserIds.has(u.id)).length})</span>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Users Table */}
       <Card>
         <CardHeader>
@@ -108,6 +174,7 @@ export default function UsersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Type</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Nom complet</TableHead>
                   <TableHead>Téléphone</TableHead>
@@ -127,6 +194,23 @@ export default function UsersPage() {
                     whileHover={{ backgroundColor: 'rgba(0,0,0,0.02)' }}
                     className="transition-colors"
                   >
+                    <TableCell>
+                      {isHairdresser(user.id) ? (
+                        <div className="flex items-center space-x-2">
+                          <Scissors className="w-4 h-4 text-primary" />
+                          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+                            Coiffeur
+                          </Badge>
+                        </div>
+                      ) : (
+                        <div className="flex items-center space-x-2">
+                          <User className="w-4 h-4 text-muted-foreground" />
+                          <Badge variant="outline" className="bg-muted/50 text-muted-foreground">
+                            Client
+                          </Badge>
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell className="font-medium flex items-center space-x-2">
                       <Mail className="w-4 h-4 text-muted-foreground" />
                       <span>{user.email}</span>

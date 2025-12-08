@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/browser'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -44,7 +44,7 @@ export default function StripePaymentsDashboard() {
   })
   const [recentPayments, setRecentPayments] = useState<PaymentWithDetails[]>([])
   const [accountsNeedingAttention, setAccountsNeedingAttention] = useState<StripeAccount[]>([])
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const router = useRouter()
 
   useEffect(() => {

@@ -31,8 +31,7 @@ interface DashboardStats {
 const COLORS = ['#bd38fc', '#a020e8', '#8615d4', '#6d0fc0', '#5a0ca3']
 
 // Fonction pour générer les statistiques mensuelles réelles
-async function generateMonthlyStats() {
-  const supabase = createClient()
+async function generateMonthlyStats(supabase: ReturnType<typeof createClient>) {
   const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
   const currentDate = new Date()
   const monthlyStats = []
@@ -114,7 +113,7 @@ export default function DashboardPage() {
         const verifiedDiplomas = diplomas.filter(d => d.verification_status === 'verified').length
 
         // Statistiques mensuelles réelles basées sur les données Supabase
-        const monthlyStats = await generateMonthlyStats()
+        const monthlyStats = await generateMonthlyStats(supabase)
 
         // Statistiques par statut de réservation
         const bookingStatusStats = [

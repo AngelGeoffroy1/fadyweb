@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/browser'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -57,7 +57,7 @@ export default function SupportTicketDetailPage() {
   const [selectedStatus, setSelectedStatus] = useState<string>('')
   const [submitting, setSubmitting] = useState(false)
   const [refundDialogOpen, setRefundDialogOpen] = useState(false)
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
     if (ticketId) {

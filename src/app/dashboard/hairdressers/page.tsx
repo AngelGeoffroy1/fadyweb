@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/browser'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { motion } from 'framer-motion'
-import { Scissors, Search, Star, MapPin, Phone, Calendar, Euro, Eye } from 'lucide-react'
+import { Scissors, Search, Star, MapPin, Phone, Calendar, Euro, Eye, Mail } from 'lucide-react'
 import { Database } from '@/lib/supabase/types'
 import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
@@ -16,6 +16,7 @@ import { useRouter } from 'next/navigation'
 type Hairdresser = Database['public']['Tables']['hairdressers']['Row'] & {
   bookings_count?: number
   total_revenue?: number
+  email?: string
 }
 
 export default function HairdressersPage() {
@@ -24,7 +25,7 @@ export default function HairdressersPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const router = useRouter()
 
   useEffect(() => {
@@ -45,9 +46,10 @@ export default function HairdressersPage() {
 
       if (hairdressersError) throw hairdressersError
 
-      // Récupérer les statistiques de réservations pour chaque coiffeur
+      // Récupérer les statistiques de réservations et email pour chaque coiffeur
       const hairdressersWithStats = await Promise.all(
         (hairdressersData || []).map(async (hairdresser) => {
+          // Récupérer les statistiques de réservations
           const { data: bookingsData } = await supabase
             .from('bookings')
             .select('total_price, status')
@@ -58,10 +60,23 @@ export default function HairdressersPage() {
             ?.filter(b => b.status === 'completed')
             .reduce((sum, booking) => sum + booking.total_price, 0) || 0
 
+          // Récupérer l'email de l'utilisateur associé
+          let email = undefined
+          if (hairdresser.user_id) {
+            const { data: userData } = await supabase
+              .from('users')
+              .select('email')
+              .eq('id', hairdresser.user_id)
+              .single()
+
+            email = userData?.email
+          }
+
           return {
             ...hairdresser,
             bookings_count: bookingsCount,
-            total_revenue: totalRevenue
+            total_revenue: totalRevenue,
+            email
           }
         })
       )
@@ -81,6 +96,7 @@ export default function HairdressersPage() {
     if (searchTerm) {
       filtered = filtered.filter(hairdresser =>
         hairdresser.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        hairdresser.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         hairdresser.phone?.includes(searchTerm) ||
         hairdresser.address.toLowerCase().includes(searchTerm.toLowerCase())
       )
@@ -140,7 +156,7 @@ export default function HairdressersPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                 <Input
-                  placeholder="Rechercher par nom, téléphone ou adresse..."
+                  placeholder="Rechercher par nom, email, téléphone ou adresse..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -178,6 +194,7 @@ export default function HairdressersPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nom</TableHead>
+                  <TableHead>Email</TableHead>
                   <TableHead>Téléphone</TableHead>
                   <TableHead>Adresse</TableHead>
                   <TableHead>Statut</TableHead>
@@ -199,6 +216,16 @@ export default function HairdressersPage() {
                   >
                     <TableCell className="font-medium">
                       {hairdresser.name}
+                    </TableCell>
+                    <TableCell>
+                      {hairdresser.email ? (
+                        <div className="flex items-center space-x-2">
+                          <Mail className="w-4 h-4 text-muted-foreground" />
+                          <span>{hairdresser.email}</span>
+                        </div>
+                      ) : (
+                        'N/A'
+                      )}
                     </TableCell>
                     <TableCell>
                       {hairdresser.phone ? (

@@ -111,33 +111,48 @@ export function useAdmin(): UseAdminReturn {
     if (!initialized) return
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         console.log('Auth state changed:', event, session?.user?.email)
-        
+
+        // Ignorer INITIAL_SESSION car déjà géré par initializeAuth()
+        if (event === 'INITIAL_SESSION') {
+          return
+        }
+
         if (event === 'SIGNED_OUT' || !session?.user) {
           setUser(null)
           setAdmin(null)
           setError(null)
+          setLoading(false)
           return
         }
 
+        // CRITIQUE : Ne JAMAIS faire d'appels Supabase async ici !
+        // Cela bloque toutes les autres requêtes Supabase dans l'app
+        // Voir: https://github.com/supabase/auth-js/issues/762
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          // Mise à jour silencieuse du user seulement
           setUser(session.user)
           setError(null)
-          
-          try {
-            const adminData = await fetchAdminData(session.user.id)
-            setAdmin(adminData)
-          } catch (err) {
-            setError(err instanceof Error ? err.message : 'Erreur lors de la vérification des droits')
-            setAdmin(null)
+          setLoading(false)
+
+          // Déclencher un refresh async en dehors du callback
+          // via un state trigger ou window event
+          if (event === 'SIGNED_IN' && session.user.id !== user?.id) {
+            // Nouveau user connecté, on doit recharger les données admin
+            // On utilise un effet séparé pour cela
+            setTimeout(() => {
+              fetchAdminData(session.user.id)
+                .then(setAdmin)
+                .catch(() => setAdmin(null))
+            }, 0)
           }
         }
       }
     )
 
     return () => subscription.unsubscribe()
-  }, [initialized, supabase, fetchAdminData])
+  }, [initialized, supabase, fetchAdminData, user])
 
   const signOut = useCallback(async () => {
     try {

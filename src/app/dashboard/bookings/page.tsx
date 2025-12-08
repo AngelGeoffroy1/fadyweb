@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/browser'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -33,16 +33,18 @@ export default function BookingsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const supabase = useMemo(() => createClient(), [])
   const router = useRouter()
+  const isFetchingRef = useRef(false)
 
-  useEffect(() => {
-    fetchBookings()
-  }, [])
+  const fetchBookings = useCallback(async () => {
+    // Éviter les appels multiples simultanés
+    if (isFetchingRef.current) {
+      console.log('Fetch already in progress, skipping')
+      return
+    }
 
-  useEffect(() => {
-    filterBookings()
-  }, [bookings, searchTerm, statusFilter])
+    isFetchingRef.current = true
+    setLoading(true)
 
-  const fetchBookings = async () => {
     try {
       const { data, error } = await supabase
         .from('bookings')
@@ -74,10 +76,15 @@ export default function BookingsPage() {
       console.error('Erreur lors du chargement des réservations:', error)
     } finally {
       setLoading(false)
+      isFetchingRef.current = false
     }
-  }
+  }, [supabase])
 
-  const filterBookings = () => {
+  useEffect(() => {
+    fetchBookings()
+  }, [fetchBookings])
+
+  const filterBookings = useCallback(() => {
     let filtered = bookings
 
     if (searchTerm) {
@@ -93,7 +100,11 @@ export default function BookingsPage() {
     }
 
     setFilteredBookings(filtered)
-  }
+  }, [bookings, searchTerm, statusFilter])
+
+  useEffect(() => {
+    filterBookings()
+  }, [filterBookings])
 
   const getStatusColor = (status: string) => {
     switch (status) {

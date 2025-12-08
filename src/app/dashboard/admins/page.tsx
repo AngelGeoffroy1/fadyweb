@@ -57,58 +57,23 @@ export default function AdminsPage() {
 
     setAddLoading(true)
     try {
-      // Vérifier si l'utilisateur existe dans auth.users
-      const { data: usersData, error: userError } = await supabase.auth.admin.listUsers({
-        page: 1,
-        perPage: 1000 // Récupérer un grand nombre d'utilisateurs pour filtrer côté client
-      })
+      // Utiliser la fonction RPC pour ajouter l'admin
+      const { data, error } = await supabase
+        .rpc('add_admin_by_email', { admin_email: newAdminEmail.trim() })
 
-      if (userError) {
-        toast.error('Erreur lors de la recherche de l\'utilisateur')
+      if (error) {
+        // Gérer les erreurs spécifiques
+        if (error.message.includes('Utilisateur non trouvé')) {
+          toast.error('Utilisateur non trouvé avec cet email')
+        } else if (error.message.includes('déjà administrateur')) {
+          toast.error('Cet utilisateur est déjà administrateur')
+        } else if (error.message.includes('Accès non autorisé')) {
+          toast.error('Vous n\'avez pas les droits pour effectuer cette action')
+        } else {
+          toast.error('Erreur lors de l\'ajout de l\'administrateur')
+        }
         return
       }
-
-      const userData = usersData.users.find(user => user.email === newAdminEmail)
-
-      if (!userData) {
-        toast.error('Utilisateur non trouvé avec cet email')
-        return
-      }
-
-      // Vérifier si l'utilisateur est déjà admin
-      const { data: existingAdmin } = await supabase
-        .from('admins')
-        .select('id')
-        .eq('user_id', userData.id)
-        .single()
-
-      if (existingAdmin) {
-        toast.error('Cet utilisateur est déjà administrateur')
-        return
-      }
-
-      // Récupérer l'ID de l'admin actuel
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        toast.error('Impossible de vérifier vos droits administrateur')
-        return
-      }
-      const { data: currentAdmin } = await supabase
-        .from('admins')
-        .select('id')
-        .eq('user_id', user.id)
-        .single()
-
-      // Créer l'admin
-      const { error } = await supabase
-        .from('admins')
-        .insert({
-          user_id: userData.id,
-          role: 'admin',
-          created_by: currentAdmin?.id || null
-        })
-
-      if (error) throw error
 
       toast.success('Administrateur ajouté avec succès')
       setNewAdminEmail('')

@@ -6,7 +6,7 @@ import HairdresserDeepLinkClient from './client'
 type Hairdresser = Database['public']['Tables']['hairdressers']['Row']
 
 interface PageProps {
-  params: Promise<{ uuid: string }>
+  params: { uuid: string }
 }
 
 async function getHairdresser(uuid: string): Promise<Hairdresser | null> {
@@ -27,7 +27,7 @@ async function getHairdresser(uuid: string): Promise<Hairdresser | null> {
 }
 
 export async function generateMetadata({ params }: PageProps) {
-  const { uuid } = await params
+  const { uuid } = params
   const hairdresser = await getHairdresser(uuid)
 
   if (!hairdresser) {
@@ -55,7 +55,7 @@ export async function generateMetadata({ params }: PageProps) {
 }
 
 export default async function HairdresserPage({ params }: PageProps) {
-  const { uuid } = await params
+  const { uuid } = params
   const hairdresser = await getHairdresser(uuid)
 
   if (!hairdresser) {

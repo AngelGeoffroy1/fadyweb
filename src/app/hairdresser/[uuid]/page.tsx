@@ -10,20 +10,38 @@ interface PageProps {
 }
 
 async function getHairdresser(uuid: string): Promise<Hairdresser | null> {
-  const supabase = await createClient()
+  try {
+    const supabase = await createClient()
 
-  const { data, error } = await supabase
-    .from('hairdressers')
-    .select('*')
-    .eq('id', uuid)
-    .single()
+    const { data, error } = await supabase
+      .from('hairdressers')
+      .select('*')
+      .eq('id', uuid)
+      .single()
 
-  if (error) {
-    console.error('Error fetching hairdresser:', error)
+    if (error) {
+      console.error('Error fetching hairdresser:', error)
+      return null
+    }
+
+    // Normaliser les données pour éviter les problèmes de sérialisation
+    if (data) {
+      return {
+        ...data,
+        rating: data.rating !== null ? Number(data.rating) : null,
+        total_reviews: data.total_reviews !== null ? Number(data.total_reviews) : null,
+        minimum_interval_time: Number(data.minimum_interval_time),
+        accepts_home_service: Boolean(data.accepts_home_service),
+        accepts_salon_service: Boolean(data.accepts_salon_service),
+        available_now: Boolean(data.available_now),
+      }
+    }
+
+    return data
+  } catch (error) {
+    console.error('Exception in getHairdresser:', error)
     return null
   }
-
-  return data
 }
 
 export async function generateMetadata({ params }: PageProps) {

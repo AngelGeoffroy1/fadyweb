@@ -62,14 +62,18 @@ export default function HairdresserDeepLinkClient({ hairdresser }: HairdresserDe
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex items-center justify-center px-4">
       <div className="text-center space-y-6">
         {/* Logo Fady */}
-        <div>
-          <h1 className="text-5xl font-bold text-gray-900 mb-2">Fady</h1>
-          <p className="text-gray-600">Réservez votre coiffeur en quelques clics</p>
+        <div className="flex flex-col items-center">
+          <img
+            src="/fady-logo.png"
+            alt="Fady"
+            className="w-32 h-32 mb-4 rounded-3xl shadow-lg"
+          />
+          <p className="text-gray-600 text-lg">Réservez votre coiffeur en quelques clics</p>
         </div>
 
         {/* Message de chargement */}
         <div className="py-8">
-          <div className="inline-block animate-spin rounded-full h-16 w-16 border-b-4 border-gray-900 mb-4"></div>
+          <div className="inline-block animate-spin rounded-full h-16 w-16 border-b-4 border-purple-600 mb-4"></div>
           <p className="text-xl text-gray-700 font-medium">Ouverture de l'application...</p>
           <p className="text-sm text-gray-500 mt-2">Vous allez être redirigé vers l'App Store si l'application n'est pas installée</p>
         </div>

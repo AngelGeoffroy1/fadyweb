@@ -35,8 +35,7 @@ export default function NotFound() {
                 size="lg"
                 className="w-full flex items-center justify-center space-x-2"
                 onClick={() => {
-                  // TODO: Remplacer par le vrai lien App Store
-                  window.location.href = 'https://apps.apple.com/app/fady/idXXXXXXXXX'
+                  window.location.href = 'https://apps.apple.com/fr/app/fady-coiffure/id6754072839'
                 }}
               >
                 <Home className="w-5 h-5" />

@@ -127,6 +127,8 @@ export default function HairdressersPage() {
 
   const toggleHairdresserVisibility = async (hairdresserId: string, currentVisibility: boolean) => {
     try {
+      const newVisibility = !currentVisibility
+
       // Vérifier si une entrée existe déjà
       const { data: existingEntry } = await supabase
         .from('invisible_hairdressers')
@@ -138,7 +140,7 @@ export default function HairdressersPage() {
         // Mettre à jour l'entrée existante
         const { error } = await supabase
           .from('invisible_hairdressers')
-          .update({ is_invisible: !currentVisibility })
+          .update({ is_invisible: newVisibility })
           .eq('hairdresser_id', hairdresserId)
 
         if (error) throw error
@@ -149,6 +151,61 @@ export default function HairdressersPage() {
           .insert({ hairdresser_id: hairdresserId, is_invisible: true })
 
         if (error) throw error
+      }
+
+      // Si le coiffeur devient invisible, envoyer un email de notification
+      if (newVisibility) {
+        // Récupérer les informations du coiffeur pour l'email
+        const hairdresser = hairdressers.find(h => h.id === hairdresserId)
+
+        console.log('🔍 Coiffeur à rendre invisible:', {
+          id: hairdresserId,
+          name: hairdresser?.name,
+          email: hairdresser?.email
+        })
+
+        if (hairdresser?.email && hairdresser?.name) {
+          try {
+            console.log('📧 Envoi de l\'email de suspension...')
+
+            const payload = {
+              email: hairdresser.email,
+              name: hairdresser.name,
+              hairdresserId: hairdresserId,
+            }
+
+            console.log('📤 Payload:', payload)
+
+            const response = await fetch(
+              'https://sfxmdvdzqasvzujwbbfg.supabase.co/functions/v1/send-hairdresser-suspension-email',
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+              }
+            )
+
+            console.log('📥 Response status:', response.status)
+
+            if (!response.ok) {
+              const errorData = await response.json()
+              console.error('❌ Erreur lors de l\'envoi de l\'email:', errorData)
+            } else {
+              const successData = await response.json()
+              console.log('✅ Email de suspension envoyé avec succès:', successData)
+            }
+          } catch (emailError) {
+            console.error('💥 Erreur lors de l\'envoi de l\'email:', emailError)
+            // On continue même si l'email échoue
+          }
+        } else {
+          console.warn('⚠️ Email ou nom manquant pour le coiffeur', {
+            email: hairdresser?.email,
+            name: hairdresser?.name
+          })
+        }
       }
 
       // Rafraîchir la liste des coiffeurs

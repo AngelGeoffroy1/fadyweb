@@ -8,15 +8,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { motion } from 'framer-motion'
-import { Scissors, Search, Star, MapPin, Phone, Calendar, Euro, Eye, Mail } from 'lucide-react'
+import { Scissors, Search, Star, MapPin, Phone, Calendar, Euro, Eye, Mail, MoreVertical, EyeOff } from 'lucide-react'
 import { Database } from '@/lib/supabase/types'
 import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 type Hairdresser = Database['public']['Tables']['hairdressers']['Row'] & {
   bookings_count?: number
   total_revenue?: number
   email?: string
+  is_invisible?: boolean
 }
 
 export default function HairdressersPage() {
@@ -72,11 +79,19 @@ export default function HairdressersPage() {
             email = userData?.email
           }
 
+          // Récupérer le statut de visibilité
+          const { data: invisibilityData } = await supabase
+            .from('invisible_hairdressers')
+            .select('is_invisible')
+            .eq('hairdresser_id', hairdresser.id)
+            .maybeSingle()
+
           return {
             ...hairdresser,
             bookings_count: bookingsCount,
             total_revenue: totalRevenue,
-            email
+            email,
+            is_invisible: invisibilityData?.is_invisible || false
           }
         })
       )
@@ -108,6 +123,39 @@ export default function HairdressersPage() {
     }
 
     setFilteredHairdressers(filtered)
+  }
+
+  const toggleHairdresserVisibility = async (hairdresserId: string, currentVisibility: boolean) => {
+    try {
+      // Vérifier si une entrée existe déjà
+      const { data: existingEntry } = await supabase
+        .from('invisible_hairdressers')
+        .select('id')
+        .eq('hairdresser_id', hairdresserId)
+        .maybeSingle()
+
+      if (existingEntry) {
+        // Mettre à jour l'entrée existante
+        const { error } = await supabase
+          .from('invisible_hairdressers')
+          .update({ is_invisible: !currentVisibility })
+          .eq('hairdresser_id', hairdresserId)
+
+        if (error) throw error
+      } else {
+        // Créer une nouvelle entrée
+        const { error } = await supabase
+          .from('invisible_hairdressers')
+          .insert({ hairdresser_id: hairdresserId, is_invisible: true })
+
+        if (error) throw error
+      }
+
+      // Rafraîchir la liste des coiffeurs
+      await fetchHairdressers()
+    } catch (error) {
+      console.error('Erreur lors de la modification de la visibilité:', error)
+    }
   }
 
   const getStatusBadge = (status: string | null) => {
@@ -214,7 +262,7 @@ export default function HairdressersPage() {
                     whileHover={{ backgroundColor: 'rgba(0,0,0,0.02)' }}
                     className="transition-colors"
                   >
-                    <TableCell className="font-medium">
+                    <TableCell className={`font-medium ${hairdresser.is_invisible ? 'text-red-600' : ''}`}>
                       {hairdresser.name}
                     </TableCell>
                     <TableCell>
@@ -264,15 +312,38 @@ export default function HairdressersPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => router.push(`/dashboard/hairdressers/${hairdresser.id}`)}
-                        className="flex items-center space-x-2"
-                      >
-                        <Eye className="w-4 h-4" />
-                        <span>Voir</span>
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreVertical className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => router.push(`/dashboard/hairdressers/${hairdresser.id}`)}
+                            className="cursor-pointer"
+                          >
+                            <Eye className="w-4 h-4 mr-2" />
+                            Voir
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => toggleHairdresserVisibility(hairdresser.id, hairdresser.is_invisible || false)}
+                            className="cursor-pointer"
+                          >
+                            {hairdresser.is_invisible ? (
+                              <>
+                                <Eye className="w-4 h-4 mr-2" />
+                                Rendre visible
+                              </>
+                            ) : (
+                              <>
+                                <EyeOff className="w-4 h-4 mr-2" />
+                                Rendre invisible
+                              </>
+                            )}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </motion.tr>
                 ))}

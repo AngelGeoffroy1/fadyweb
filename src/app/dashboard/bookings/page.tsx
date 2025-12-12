@@ -23,6 +23,7 @@ type Booking = Database['public']['Tables']['bookings']['Row'] & {
   service_name?: string
   duration_minutes?: number
   service_price?: number
+  hairdresser_is_invisible?: boolean
 }
 
 export default function BookingsPage() {
@@ -58,6 +59,17 @@ export default function BookingsPage() {
 
       if (error) throw error
 
+      // Récupérer les informations de visibilité pour tous les coiffeurs
+      const hairdresserIds = [...new Set(data?.map(b => b.hairdresser_id).filter(Boolean))]
+      const { data: invisibilityData } = await supabase
+        .from('invisible_hairdressers')
+        .select('hairdresser_id, is_invisible')
+        .in('hairdresser_id', hairdresserIds)
+
+      const invisibilityMap = new Map(
+        invisibilityData?.map(item => [item.hairdresser_id, item.is_invisible]) || []
+      )
+
       const transformedBookings: Booking[] = (data || []).map(booking => ({
         ...booking,
         user_name: booking.users?.full_name || 'N/A',
@@ -68,7 +80,8 @@ export default function BookingsPage() {
         hairdresser_address: booking.hairdressers?.address || null,
         service_name: booking.hairdresser_services?.service_name || 'Service inconnu',
         duration_minutes: booking.hairdresser_services?.duration_minutes || 0,
-        service_price: booking.hairdresser_services?.price || 0
+        service_price: booking.hairdresser_services?.price || 0,
+        hairdresser_is_invisible: invisibilityMap.get(booking.hairdresser_id) || false
       }))
 
       setBookings(transformedBookings)
@@ -254,7 +267,9 @@ export default function BookingsPage() {
                     </TableCell>
                     <TableCell>
                       <div className="space-y-1">
-                        <div className="font-medium">{booking.hairdresser_name}</div>
+                        <div className={`font-medium ${booking.hairdresser_is_invisible ? 'text-red-600' : ''}`}>
+                          {booking.hairdresser_name}
+                        </div>
                         {booking.hairdresser_phone && (
                           <div className="flex items-center space-x-1 text-sm text-muted-foreground">
                             <Phone className="w-3 h-3" />

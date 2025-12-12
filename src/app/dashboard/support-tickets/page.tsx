@@ -19,6 +19,8 @@ type SupportTicket = Database['public']['Tables']['support_tickets']['Row'] & {
   hairdresser_name?: string
   service_name?: string
   payment_method?: string
+  hairdresser_is_invisible?: boolean
+  hairdresser_id_ref?: string
 }
 
 export default function SupportTicketsPage() {
@@ -56,12 +58,25 @@ export default function SupportTicketsPage() {
 
       if (error) throw error
 
+      // Récupérer les informations de visibilité pour tous les coiffeurs
+      const hairdresserIds = [...new Set(data?.map(t => t.bookings?.hairdresser_id).filter(Boolean))]
+      const { data: invisibilityData } = await supabase
+        .from('invisible_hairdressers')
+        .select('hairdresser_id, is_invisible')
+        .in('hairdresser_id', hairdresserIds)
+
+      const invisibilityMap = new Map(
+        invisibilityData?.map(item => [item.hairdresser_id, item.is_invisible]) || []
+      )
+
       const transformedTickets = (data || []).map(ticket => ({
         ...ticket,
         user_email: ticket.email || 'N/A',
         hairdresser_name: ticket.bookings?.hairdressers?.name || 'N/A',
         service_name: ticket.bookings?.hairdresser_services?.service_name || 'N/A',
-        payment_method: ticket.bookings?.payment_method || 'N/A'
+        payment_method: ticket.bookings?.payment_method || 'N/A',
+        hairdresser_id_ref: ticket.bookings?.hairdresser_id,
+        hairdresser_is_invisible: invisibilityMap.get(ticket.bookings?.hairdresser_id) || false
       }))
 
       setTickets(transformedTickets)
@@ -315,7 +330,7 @@ export default function SupportTicketsPage() {
                         {getPaymentMethodLabel(ticket.payment_method || null)}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
+                    <TableCell className={`text-sm ${ticket.hairdresser_is_invisible ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>
                       {ticket.hairdresser_name}
                     </TableCell>
                     <TableCell>

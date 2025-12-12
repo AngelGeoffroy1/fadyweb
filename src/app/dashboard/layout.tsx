@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
-import { LogOut, Users, Scissors, FileCheck, Settings, Menu, ChevronLeft, Calendar, Shield, CreditCard, Wallet, MessageSquare, Crown } from 'lucide-react'
+import { LogOut, Users, Scissors, FileCheck, Settings, Menu, ChevronLeft, Calendar, Shield, CreditCard, Wallet, MessageSquare, Crown, Smartphone } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
@@ -92,6 +92,7 @@ export default function DashboardLayout({
     { name: 'Diplômes', href: '/dashboard/diplomas', icon: FileCheck },
     { name: 'Modération', href: '/dashboard/moderation', icon: Shield },
     { name: 'Support Tickets', href: '/dashboard/support-tickets', icon: MessageSquare },
+    { name: 'Version App', href: '/dashboard/app-version', icon: Smartphone },
     { name: 'Administrateurs', href: '/dashboard/admins', icon: Settings },
   ]
 

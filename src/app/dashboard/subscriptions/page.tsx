@@ -8,10 +8,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Checkbox } from '@/components/ui/checkbox'
 import { motion } from 'framer-motion'
-import { CreditCard, Search, Calendar, TrendingUp, Users, Settings } from 'lucide-react'
+import { CreditCard, Search, Calendar, TrendingUp, Users, Settings, Gift, UserPlus } from 'lucide-react'
 import { Database } from '@/lib/supabase/types'
 import { useRouter } from 'next/navigation'
+import { useToast } from '@/hooks/use-toast'
 
 type Subscription = Database['public']['Tables']['hairdresser_subscriptions']['Row'] & {
   hairdresser?: {
@@ -20,6 +25,28 @@ type Subscription = Database['public']['Tables']['hairdresser_subscriptions']['R
     email?: string
   }
   commission_percentage?: number
+  // Propriétés additionnelles non encore dans les types générés
+  is_gifted?: boolean | null
+  gifted_by_admin_id?: string | null
+  gifted_reason?: string | null
+  apple_transaction_id?: string | null
+  apple_original_transaction_id?: string | null
+  expires_date?: string | null
+}
+
+type Hairdresser = {
+  id: string
+  name: string
+  avatar_url?: string
+  phone?: string
+  user_id?: string
+  users?: {
+    email?: string
+  }
+  activeSubscription?: {
+    subscription_type: string
+    status: string
+  } | null
 }
 
 export default function SubscriptionsPage() {
@@ -31,6 +58,18 @@ export default function SubscriptionsPage() {
   const [typeFilter, setTypeFilter] = useState('all')
   const supabase = useMemo(() => createClient(), [])
   const router = useRouter()
+  const { toast } = useToast()
+
+  // States pour la modal d'assignation
+  const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false)
+  const [searchHairdresser, setSearchHairdresser] = useState('')
+  const [hairdressers, setHairdressers] = useState<Hairdresser[]>([])
+  const [selectedHairdresser, setSelectedHairdresser] = useState<Hairdresser | null>(null)
+  const [selectedSubscriptionType, setSelectedSubscriptionType] = useState<string>('standard')
+  const [endDate, setEndDate] = useState<string>('')
+  const [isIndefinite, setIsIndefinite] = useState(false)
+  const [giftedReason, setGiftedReason] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Stats
   const [stats, setStats] = useState({
@@ -49,6 +88,14 @@ export default function SubscriptionsPage() {
     filterSubscriptions()
     calculateStats()
   }, [subscriptions, searchTerm, statusFilter, typeFilter])
+
+  useEffect(() => {
+    if (searchHairdresser.length >= 2) {
+      searchHairdressers()
+    } else {
+      setHairdressers([])
+    }
+  }, [searchHairdresser])
 
   const fetchSubscriptions = async () => {
     try {
@@ -136,6 +183,153 @@ export default function SubscriptionsPage() {
     })
   }
 
+  const searchHairdressers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('hairdressers')
+        .select(`
+          id,
+          name,
+          avatar_url,
+          phone,
+          user_id
+        `)
+        .ilike('name', `%${searchHairdresser}%`)
+        .limit(10)
+
+      if (error) throw error
+
+      // Récupérer les emails et abonnements actifs des coiffeurs
+      const enrichedData = await Promise.all((data || []).map(async (hairdresser) => {
+        let enriched: Hairdresser = { ...hairdresser }
+
+        // Récupérer l'email
+        if (hairdresser.user_id) {
+          const { data: userData } = await supabase
+            .from('users')
+            .select('email')
+            .eq('id', hairdresser.user_id)
+            .single()
+
+          if (userData) {
+            enriched.users = { email: userData.email }
+          }
+        }
+
+        // Récupérer l'abonnement actif
+        const { data: subscriptionData } = await supabase
+          .from('hairdresser_subscriptions')
+          .select('subscription_type, status')
+          .eq('hairdresser_id', hairdresser.id)
+          .eq('status', 'active')
+          .maybeSingle()
+
+        enriched.activeSubscription = subscriptionData || null
+
+        return enriched
+      }))
+
+      setHairdressers(enrichedData)
+    } catch (error) {
+      console.error('Erreur lors de la recherche de coiffeurs:', error)
+    }
+  }
+
+  const handleAssignSubscription = async () => {
+    if (!selectedHairdresser) {
+      toast({
+        title: 'Erreur',
+        description: 'Veuillez sélectionner un coiffeur',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    if (!isIndefinite && !endDate) {
+      toast({
+        title: 'Erreur',
+        description: 'Veuillez sélectionner une date de fin ou cocher "Indéfiniment"',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      // Récupérer l'ID de l'admin connecté
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Utilisateur non connecté')
+
+      const { data: adminData } = await supabase
+        .from('admins')
+        .select('id')
+        .eq('user_id', user.id)
+        .single()
+
+      if (!adminData) throw new Error('Admin non trouvé')
+
+      // Vérifier si le coiffeur a déjà un abonnement actif
+      const { data: existingSubscription } = await supabase
+        .from('hairdresser_subscriptions')
+        .select('id')
+        .eq('hairdresser_id', selectedHairdresser.id)
+        .eq('status', 'active')
+        .maybeSingle()
+
+      if (existingSubscription) {
+        toast({
+          title: 'Erreur',
+          description: 'Ce coiffeur a déjà un abonnement actif',
+          variant: 'destructive',
+        })
+        setIsSubmitting(false)
+        return
+      }
+
+      // Créer l'abonnement offert
+      const { error: subscriptionError } = await supabase
+        .from('hairdresser_subscriptions')
+        .insert({
+          hairdresser_id: selectedHairdresser.id,
+          subscription_type: selectedSubscriptionType,
+          status: 'active',
+          current_period_start: new Date().toISOString(),
+          current_period_end: isIndefinite ? null : new Date(endDate).toISOString(),
+          is_gifted: true,
+          gifted_by_admin_id: adminData.id,
+          gifted_reason: giftedReason || 'Abonnement offert par l\'admin',
+        })
+
+      if (subscriptionError) throw subscriptionError
+
+      toast({
+        title: 'Succès',
+        description: 'Abonnement assigné avec succès',
+      })
+
+      // Réinitialiser le formulaire
+      setIsAssignDialogOpen(false)
+      setSelectedHairdresser(null)
+      setSelectedSubscriptionType('standard')
+      setEndDate('')
+      setIsIndefinite(false)
+      setGiftedReason('')
+      setSearchHairdresser('')
+
+      // Recharger la liste
+      fetchSubscriptions()
+    } catch (error) {
+      console.error('Erreur lors de l\'assignation de l\'abonnement:', error)
+      toast({
+        title: 'Erreur',
+        description: 'Impossible d\'assigner l\'abonnement',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'active':
@@ -191,13 +385,222 @@ export default function SubscriptionsPage() {
           <h1 className="text-3xl font-bold text-foreground">Abonnements</h1>
           <p className="text-muted-foreground">Gestion des abonnements des coiffeurs</p>
         </div>
-        <Button
-          onClick={() => router.push('/dashboard/subscriptions/fees')}
-          className="flex items-center space-x-2"
-        >
-          <Settings className="w-4 h-4" />
-          <span>Gérer les commissions</span>
-        </Button>
+        <div className="flex items-center space-x-2">
+          <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="default" className="flex items-center space-x-2">
+                <Gift className="w-4 h-4" />
+                <span>Assigner un abonnement</span>
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Assigner un abonnement</DialogTitle>
+                <DialogDescription>
+                  Assignez un abonnement gratuit à un coiffeur
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4 py-4">
+                {/* Recherche de coiffeur */}
+                <div className="space-y-2">
+                  <Label htmlFor="search-hairdresser">Rechercher un coiffeur</Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                    <Input
+                      id="search-hairdresser"
+                      placeholder="Nom du coiffeur..."
+                      value={searchHairdresser}
+                      onChange={(e) => setSearchHairdresser(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+
+                {/* Résultats de recherche */}
+                {hairdressers.length > 0 && (
+                  <div className="border rounded-lg max-h-48 overflow-y-auto">
+                    {hairdressers.map((hairdresser) => {
+                      const hasActiveSubscription = !!hairdresser.activeSubscription
+                      return (
+                        <div
+                          key={hairdresser.id}
+                          onClick={() => {
+                            if (!hasActiveSubscription) {
+                              setSelectedHairdresser(hairdresser)
+                            }
+                          }}
+                          className={`p-3 transition-colors ${
+                            hasActiveSubscription
+                              ? 'opacity-60 cursor-not-allowed bg-muted/30'
+                              : 'cursor-pointer hover:bg-muted'
+                          } ${
+                            selectedHairdresser?.id === hairdresser.id ? 'bg-primary/10' : ''
+                          }`}
+                        >
+                          <div className="flex items-center space-x-3">
+                            {hairdresser.avatar_url ? (
+                              <img
+                                src={hairdresser.avatar_url}
+                                alt={hairdresser.name}
+                                className="w-10 h-10 rounded-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                <span className="text-primary font-bold">
+                                  {hairdresser.name.charAt(0)}
+                                </span>
+                              </div>
+                            )}
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between">
+                                <p className="font-medium">{hairdresser.name}</p>
+                                {hasActiveSubscription && (
+                                  <Badge className="bg-green-100 text-green-800 text-xs">
+                                    {hairdresser.activeSubscription?.subscription_type === 'standard' && 'Standard'}
+                                    {hairdresser.activeSubscription?.subscription_type === 'boost' && 'Boost'}
+                                    {hairdresser.activeSubscription?.subscription_type === 'rookie' && 'Rookie'}
+                                    {hairdresser.activeSubscription?.subscription_type === 'ambassador' && 'Ambassadeur'}
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-sm text-muted-foreground">
+                                {hairdresser.users?.email || hairdresser.phone || 'N/A'}
+                              </p>
+                              {hasActiveSubscription && (
+                                <p className="text-xs text-orange-600 mt-1">
+                                  Abonnement actif - impossible d'assigner
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* Coiffeur sélectionné */}
+                {selectedHairdresser && (
+                  <div className="p-4 border rounded-lg bg-muted/50">
+                    <p className="text-sm font-medium mb-2">Coiffeur sélectionné:</p>
+                    <div className="flex items-center space-x-3">
+                      {selectedHairdresser.avatar_url ? (
+                        <img
+                          src={selectedHairdresser.avatar_url}
+                          alt={selectedHairdresser.name}
+                          className="w-12 h-12 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                          <span className="text-primary font-bold text-lg">
+                            {selectedHairdresser.name.charAt(0)}
+                          </span>
+                        </div>
+                      )}
+                      <div>
+                        <p className="font-bold">{selectedHairdresser.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {selectedHairdresser.users?.email || selectedHairdresser.phone || 'N/A'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Type d'abonnement */}
+                <div className="space-y-2">
+                  <Label htmlFor="subscription-type">Type d'abonnement</Label>
+                  <Select value={selectedSubscriptionType} onValueChange={setSelectedSubscriptionType}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sélectionner un type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="standard">Standard</SelectItem>
+                      <SelectItem value="boost">Boost</SelectItem>
+                      <SelectItem value="rookie">Rookie</SelectItem>
+                      <SelectItem value="ambassador">Ambassadeur</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Date de fin */}
+                <div className="space-y-2">
+                  <Label htmlFor="end-date">Date de fin</Label>
+                  <div className="flex items-center space-x-4">
+                    <Input
+                      id="end-date"
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      disabled={isIndefinite}
+                      min={new Date().toISOString().split('T')[0]}
+                      className="flex-1"
+                    />
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="indefinite"
+                        checked={isIndefinite}
+                        onCheckedChange={(checked) => {
+                          setIsIndefinite(checked as boolean)
+                          if (checked) setEndDate('')
+                        }}
+                      />
+                      <Label htmlFor="indefinite" className="text-sm cursor-pointer">
+                        Indéfiniment
+                      </Label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Raison */}
+                <div className="space-y-2">
+                  <Label htmlFor="reason">Raison (optionnel)</Label>
+                  <Textarea
+                    id="reason"
+                    placeholder="Ex: Partenariat commercial, Beta testeur..."
+                    value={giftedReason}
+                    onChange={(e) => setGiftedReason(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+
+                {/* Actions */}
+                <div className="flex justify-end space-x-2 pt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setIsAssignDialogOpen(false)
+                      setSelectedHairdresser(null)
+                      setSelectedSubscriptionType('standard')
+                      setEndDate('')
+                      setIsIndefinite(false)
+                      setGiftedReason('')
+                      setSearchHairdresser('')
+                    }}
+                    disabled={isSubmitting}
+                  >
+                    Annuler
+                  </Button>
+                  <Button
+                    onClick={handleAssignSubscription}
+                    disabled={!selectedHairdresser || isSubmitting}
+                  >
+                    {isSubmitting ? 'Assignation...' : 'Assigner'}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Button
+            variant="outline"
+            onClick={() => router.push('/dashboard/subscriptions/fees')}
+            className="flex items-center space-x-2"
+          >
+            <Settings className="w-4 h-4" />
+            <span>Gérer les commissions</span>
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -339,7 +742,7 @@ export default function SubscriptionsPage() {
                   <TableHead>Commission</TableHead>
                   <TableHead>Début</TableHead>
                   <TableHead>Fin</TableHead>
-                  <TableHead>Annulation</TableHead>
+                  <TableHead>Offert</TableHead>
                   <TableHead>Stripe ID</TableHead>
                 </TableRow>
               </TableHeader>
@@ -382,13 +785,18 @@ export default function SubscriptionsPage() {
                           <Calendar className="w-4 h-4 text-muted-foreground" />
                           <span>{new Date(subscription.current_period_end).toLocaleDateString('fr-FR')}</span>
                         </div>
-                      ) : 'N/A'}
+                      ) : (
+                        <Badge className="bg-purple-100 text-purple-800">Indéfini</Badge>
+                      )}
                     </TableCell>
                     <TableCell>
-                      {subscription.cancel_at_period_end ? (
-                        <Badge className="bg-orange-100 text-orange-800">Oui</Badge>
+                      {subscription.is_gifted ? (
+                        <div className="flex items-center space-x-1">
+                          <Gift className="w-4 h-4 text-pink-500" />
+                          <Badge className="bg-pink-100 text-pink-800">Oui</Badge>
+                        </div>
                       ) : (
-                        <Badge className="bg-green-100 text-green-800">Non</Badge>
+                        <Badge variant="outline">Non</Badge>
                       )}
                     </TableCell>
                     <TableCell>

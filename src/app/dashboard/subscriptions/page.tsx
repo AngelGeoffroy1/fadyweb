@@ -9,11 +9,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { motion } from 'framer-motion'
-import { CreditCard, Search, Calendar, TrendingUp, Users, Settings, Gift, UserPlus } from 'lucide-react'
+import { CreditCard, Search, Calendar, TrendingUp, Users, Settings, Gift, UserPlus, Trash2 } from 'lucide-react'
 import { Database } from '@/lib/supabase/types'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/hooks/use-toast'
@@ -70,6 +71,11 @@ export default function SubscriptionsPage() {
   const [isIndefinite, setIsIndefinite] = useState(false)
   const [giftedReason, setGiftedReason] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // States pour la suppression d'abonnement offert
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [subscriptionToDelete, setSubscriptionToDelete] = useState<Subscription | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // Stats
   const [stats, setStats] = useState({
@@ -327,6 +333,39 @@ export default function SubscriptionsPage() {
       })
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const handleDeleteGiftedSubscription = async () => {
+    if (!subscriptionToDelete) return
+
+    setIsDeleting(true)
+    try {
+      const { error } = await supabase
+        .from('hairdresser_subscriptions')
+        .delete()
+        .eq('id', subscriptionToDelete.id)
+
+      if (error) throw error
+
+      toast({
+        title: 'Succès',
+        description: `L'abonnement offert de ${subscriptionToDelete.hairdresser?.name || 'ce coiffeur'} a été supprimé`,
+      })
+
+      // Fermer la modal et recharger la liste
+      setIsDeleteDialogOpen(false)
+      setSubscriptionToDelete(null)
+      fetchSubscriptions()
+    } catch (error) {
+      console.error('Erreur lors de la suppression de l\'abonnement:', error)
+      toast({
+        title: 'Erreur',
+        description: 'Impossible de supprimer l\'abonnement',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -744,6 +783,7 @@ export default function SubscriptionsPage() {
                   <TableHead>Fin</TableHead>
                   <TableHead>Offert</TableHead>
                   <TableHead>Stripe ID</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -804,6 +844,21 @@ export default function SubscriptionsPage() {
                         {subscription.stripe_subscription_id || 'N/A'}
                       </span>
                     </TableCell>
+                    <TableCell>
+                      {subscription.is_gifted && subscription.status === 'active' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => {
+                            setSubscriptionToDelete(subscription)
+                            setIsDeleteDialogOpen(true)
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </TableCell>
                   </motion.tr>
                 ))}
               </TableBody>
@@ -818,6 +873,32 @@ export default function SubscriptionsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Modal de confirmation de suppression */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer l'abonnement offert</AlertDialogTitle>
+            <AlertDialogDescription>
+              Êtes-vous sûr de vouloir supprimer l'abonnement offert de{' '}
+              <span className="font-semibold">{subscriptionToDelete?.hairdresser?.name}</span> ?
+              <br /><br />
+              Cette action est irréversible. Le coiffeur perdra immédiatement l'accès aux fonctionnalités de son abonnement{' '}
+              <span className="font-semibold capitalize">{subscriptionToDelete?.subscription_type}</span>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteGiftedSubscription}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              {isDeleting ? 'Suppression...' : 'Supprimer'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

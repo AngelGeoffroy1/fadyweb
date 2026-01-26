@@ -343,6 +343,18 @@ export default function DiplomasPage() {
                                   <p className="text-sm text-muted-foreground">{selectedDiploma.rejection_reason}</p>
                                 </div>
                               )}
+
+                              {selectedDiploma.verification_status === 'pending' && (
+                                <div>
+                                  <label className="text-sm font-medium">Raison du rejet (obligatoire pour rejeter)</label>
+                                  <Input
+                                    placeholder="Ex: Document illisible, diplôme non reconnu..."
+                                    value={rejectionReason}
+                                    onChange={(e) => setRejectionReason(e.target.value)}
+                                    className="mt-1"
+                                  />
+                                </div>
+                              )}
                             </div>
                           )}
 

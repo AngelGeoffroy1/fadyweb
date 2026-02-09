@@ -432,7 +432,7 @@ export default function SubscriptionsPage() {
                 <span>Assigner un abonnement</span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Assigner un abonnement</DialogTitle>
                 <DialogDescription>
@@ -469,13 +469,11 @@ export default function SubscriptionsPage() {
                               setSelectedHairdresser(hairdresser)
                             }
                           }}
-                          className={`p-3 transition-colors ${
-                            hasActiveSubscription
+                          className={`p-3 transition-colors ${hasActiveSubscription
                               ? 'opacity-60 cursor-not-allowed bg-muted/30'
                               : 'cursor-pointer hover:bg-muted'
-                          } ${
-                            selectedHairdresser?.id === hairdresser.id ? 'bg-primary/10' : ''
-                          }`}
+                            } ${selectedHairdresser?.id === hairdresser.id ? 'bg-primary/10' : ''
+                            }`}
                         >
                           <div className="flex items-center space-x-3">
                             {hairdresser.avatar_url ? (

@@ -28,6 +28,7 @@ export const edgeFunctionUrls = {
   sendPushNotification: `${supabaseConfig.url}/functions/v1/send-push-notification`,
   sendPushNotificationFadyPro: `${supabaseConfig.url}/functions/v1/send-push-notification-fady-pro`,
   refundPayment: `${supabaseConfig.url}/functions/v1/refund-payment`,
+  sendBroadcastNotification: `${supabaseConfig.url}/functions/v1/send-broadcast-notification`,
 }
 
 // Log de vérification en développement
@@ -38,6 +39,7 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
       sendPushNotification: edgeFunctionUrls.sendPushNotification,
       sendPushNotificationFadyPro: edgeFunctionUrls.sendPushNotificationFadyPro,
       refundPayment: edgeFunctionUrls.refundPayment,
+      sendBroadcastNotification: edgeFunctionUrls.sendBroadcastNotification,
     }
   })
 }

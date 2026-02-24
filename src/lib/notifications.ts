@@ -30,6 +30,14 @@ interface NotificationResponse {
   total: number;
 }
 
+interface BroadcastNotificationParams {
+  title: string;
+  body: string;
+  target: 'all_clients' | 'all_hairdressers' | 'all';
+  data?: NotificationData;
+  userIds?: string[];
+}
+
 /**
  * Envoie une notification push à un client (Fady App)
  */
@@ -138,6 +146,54 @@ export async function sendHairdresserNotification(
     return result;
   } catch (error) {
     console.error('❌ [sendHairdresserNotification] Exception:', error);
+    throw error;
+  }
+}
+
+/**
+ * Envoie une notification push broadcast (à tous les clients, tous les coiffeurs, ou tous)
+ */
+export async function sendBroadcastNotification(
+  params: BroadcastNotificationParams
+): Promise<NotificationResponse> {
+  console.log('📢 [sendBroadcastNotification] Début:', {
+    target: params.target,
+    title: params.title,
+    url: edgeFunctionUrls.sendBroadcastNotification
+  })
+
+  try {
+    const supabase = createClient()
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+    if (sessionError || !session) {
+      console.error('❌ [sendBroadcastNotification] Erreur de session:', sessionError)
+      throw new Error('Session expirée, veuillez vous reconnecter')
+    }
+
+    const response = await fetch(
+      edgeFunctionUrls.sendBroadcastNotification,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(params),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      console.error('❌ [sendBroadcastNotification] Erreur réponse:', error);
+      throw new Error(error.error || 'Échec de l\'envoi de la notification broadcast');
+    }
+
+    const result = await response.json();
+    console.log('✅ [sendBroadcastNotification] Succès:', result)
+    return result;
+  } catch (error) {
+    console.error('❌ [sendBroadcastNotification] Exception:', error);
     throw error;
   }
 }

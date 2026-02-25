@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { motion } from 'framer-motion'
-import { FileCheck, Eye, CheckCircle, XCircle, Search, Filter } from 'lucide-react'
+import { FileCheck, Eye, CheckCircle, XCircle, Search, Filter, GraduationCap, Briefcase, FileText } from 'lucide-react'
 import { Database } from '@/lib/supabase/types'
 import { sendHairdresserNotification, NotificationTemplates } from '@/lib/notifications'
 
@@ -26,6 +26,7 @@ export default function DiplomasPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [typeFilter, setTypeFilter] = useState('all')
   const [selectedDiploma, setSelectedDiploma] = useState<DiplomaVerification | null>(null)
   const [rejectionReason, setRejectionReason] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
@@ -37,7 +38,7 @@ export default function DiplomasPage() {
 
   useEffect(() => {
     filterDiplomas()
-  }, [diplomas, searchTerm, statusFilter])
+  }, [diplomas, searchTerm, statusFilter, typeFilter])
 
   const fetchDiplomas = async () => {
     try {
@@ -61,7 +62,6 @@ export default function DiplomasPage() {
   const filterDiplomas = () => {
     let filtered = diplomas
 
-    // Filtre par terme de recherche
     if (searchTerm) {
       filtered = filtered.filter(diploma =>
         diploma.hairdresser.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -69,9 +69,12 @@ export default function DiplomasPage() {
       )
     }
 
-    // Filtre par statut
     if (statusFilter !== 'all') {
       filtered = filtered.filter(diploma => diploma.verification_status === statusFilter)
+    }
+
+    if (typeFilter !== 'all') {
+      filtered = filtered.filter(diploma => diploma.verification_type === typeFilter)
     }
 
     setFilteredDiplomas(filtered)
@@ -91,7 +94,6 @@ export default function DiplomasPage() {
 
       if (error) throw error
 
-      // Mettre à jour le statut du coiffeur
       const diploma = diplomas.find(d => d.id === diplomaId)
       if (diploma) {
         await supabase
@@ -99,7 +101,6 @@ export default function DiplomasPage() {
           .update({ statut: 'Diplomé' })
           .eq('id', diploma.hairdresser_id)
 
-        // Envoyer une notification au coiffeur
         if (diploma.hairdresser.user_id) {
           try {
             await sendHairdresserNotification(
@@ -108,7 +109,6 @@ export default function DiplomasPage() {
             console.log('✅ Notification envoyée au coiffeur pour approbation du diplôme')
           } catch (notifError) {
             console.error('❌ Erreur lors de l\'envoi de la notification:', notifError)
-            // Ne pas bloquer le processus si la notification échoue
           }
         }
       }
@@ -137,7 +137,6 @@ export default function DiplomasPage() {
 
       if (error) throw error
 
-      // Envoyer une notification au coiffeur
       const diploma = diplomas.find(d => d.id === diplomaId)
       if (diploma && diploma.hairdresser.user_id) {
         try {
@@ -147,7 +146,6 @@ export default function DiplomasPage() {
           console.log('✅ Notification envoyée au coiffeur pour rejet du diplôme')
         } catch (notifError) {
           console.error('❌ Erreur lors de l\'envoi de la notification:', notifError)
-          // Ne pas bloquer le processus si la notification échoue
         }
       }
 
@@ -169,9 +167,43 @@ export default function DiplomasPage() {
         return <Badge variant="default" className="bg-green-100 text-green-800">Vérifié</Badge>
       case 'rejected':
         return <Badge variant="destructive">Rejeté</Badge>
+      case 'notsubmit':
+        return <Badge variant="outline">Non soumis</Badge>
       default:
         return <Badge variant="outline">{status}</Badge>
     }
+  }
+
+  const getTypeBadge = (type: string) => {
+    switch (type) {
+      case 'diploma':
+        return (
+          <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+            <GraduationCap className="w-3 h-3 mr-1" />
+            Diplôme
+          </Badge>
+        )
+      case 'experience':
+        return (
+          <Badge variant="secondary" className="bg-purple-100 text-purple-800">
+            <Briefcase className="w-3 h-3 mr-1" />
+            Expérience
+          </Badge>
+        )
+      default:
+        return <Badge variant="outline">{type}</Badge>
+    }
+  }
+
+  const getAllFileUrls = (diploma: DiplomaVerification): string[] => {
+    const urls: string[] = []
+    if (diploma.diploma_file_url) {
+      urls.push(diploma.diploma_file_url)
+    }
+    if (diploma.experience_file_urls && diploma.experience_file_urls.length > 0) {
+      urls.push(...diploma.experience_file_urls)
+    }
+    return urls
   }
 
   if (loading) {
@@ -188,7 +220,7 @@ export default function DiplomasPage() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-foreground">Gestion des diplômes</h1>
-        <p className="text-muted-foreground">Vérification et validation des diplômes des coiffeurs</p>
+        <p className="text-muted-foreground">Vérification et validation des diplômes et justificatifs d&apos;expérience des coiffeurs</p>
       </div>
 
       {/* Filters */}
@@ -206,6 +238,17 @@ export default function DiplomasPage() {
                 />
               </div>
             </div>
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-full sm:w-48">
+                <GraduationCap className="w-4 h-4 mr-2" />
+                <SelectValue placeholder="Type de vérification" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les types</SelectItem>
+                <SelectItem value="diploma">Diplôme</SelectItem>
+                <SelectItem value="experience">Expérience</SelectItem>
+              </SelectContent>
+            </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-full sm:w-48">
                 <Filter className="w-4 h-4 mr-2" />
@@ -216,6 +259,7 @@ export default function DiplomasPage() {
                 <SelectItem value="pending">En attente</SelectItem>
                 <SelectItem value="verified">Vérifiés</SelectItem>
                 <SelectItem value="rejected">Rejetés</SelectItem>
+                <SelectItem value="notsubmit">Non soumis</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -230,7 +274,7 @@ export default function DiplomasPage() {
             <span>Demandes de vérification ({filteredDiplomas.length})</span>
           </CardTitle>
           <CardDescription>
-            Liste des diplômes soumis par les coiffeurs
+            Liste des diplômes et justificatifs soumis par les coiffeurs
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -240,6 +284,8 @@ export default function DiplomasPage() {
                 <TableRow>
                   <TableHead>Coiffeur</TableHead>
                   <TableHead>Téléphone</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Fichiers</TableHead>
                   <TableHead>Date de soumission</TableHead>
                   <TableHead>Statut</TableHead>
                   <TableHead>Attestation acceptée</TableHead>
@@ -247,145 +293,191 @@ export default function DiplomasPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredDiplomas.map((diploma) => (
-                  <motion.tr
-                    key={diploma.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    whileHover={{ backgroundColor: 'rgba(0,0,0,0.02)' }}
-                    className="transition-colors"
-                  >
-                    <TableCell className="font-medium">
-                      {diploma.hairdresser.name}
-                    </TableCell>
-                    <TableCell>{diploma.hairdresser.phone || 'N/A'}</TableCell>
-                    <TableCell>
-                      {diploma.submitted_at ? new Date(diploma.submitted_at).toLocaleDateString('fr-FR') : 'N/A'}
-                    </TableCell>
-                    <TableCell>{getStatusBadge(diploma.verification_status)}</TableCell>
-                    <TableCell>
-                      {diploma.has_accepted_attestation ? (
-                        <Badge variant="default" className="bg-green-100 text-green-800">Oui</Badge>
-                      ) : (
-                        <Badge variant="outline">Non</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setSelectedDiploma(diploma)}
-                            className="transition-all duration-200 hover:scale-105"
-                          >
-                            <Eye className="w-4 h-4 mr-2" />
-                            Voir
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-2xl">
-                          <DialogHeader>
-                            <DialogTitle>Détails du diplôme</DialogTitle>
-                            <DialogDescription>
-                              Informations du coiffeur et fichier de diplôme
-                            </DialogDescription>
-                          </DialogHeader>
-                          
-                          {selectedDiploma && (
-                            <div className="space-y-4">
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <label className="text-sm font-medium">Nom du coiffeur</label>
-                                  <p className="text-sm text-muted-foreground">{selectedDiploma.hairdresser.name}</p>
-                                </div>
-                                <div>
-                                  <label className="text-sm font-medium">Téléphone</label>
-                                  <p className="text-sm text-muted-foreground">{selectedDiploma.hairdresser.phone || 'N/A'}</p>
-                                </div>
-                                <div>
-                                  <label className="text-sm font-medium">Email</label>
-                                  <p className="text-sm text-muted-foreground">{selectedDiploma.hairdresser.user_id}</p>
-                                </div>
-                                <div>
-                                  <label className="text-sm font-medium">Statut actuel</label>
-                                  <p className="text-sm">{selectedDiploma.hairdresser.statut}</p>
-                                </div>
-                              </div>
+                {filteredDiplomas.map((diploma) => {
+                  const fileCount = getAllFileUrls(diploma).length
+                  return (
+                    <motion.tr
+                      key={diploma.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      whileHover={{ backgroundColor: 'rgba(0,0,0,0.02)' }}
+                      className="transition-colors"
+                    >
+                      <TableCell className="font-medium">
+                        {diploma.hairdresser.name}
+                      </TableCell>
+                      <TableCell>{diploma.hairdresser.phone || 'N/A'}</TableCell>
+                      <TableCell>{getTypeBadge(diploma.verification_type)}</TableCell>
+                      <TableCell>
+                        <span className="text-sm text-muted-foreground">
+                          {fileCount} fichier{fileCount > 1 ? 's' : ''}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        {diploma.submitted_at ? new Date(diploma.submitted_at).toLocaleDateString('fr-FR') : 'N/A'}
+                      </TableCell>
+                      <TableCell>{getStatusBadge(diploma.verification_status)}</TableCell>
+                      <TableCell>
+                        {diploma.has_accepted_attestation ? (
+                          <Badge variant="default" className="bg-green-100 text-green-800">Oui</Badge>
+                        ) : (
+                          <Badge variant="outline">Non</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setSelectedDiploma(diploma)}
+                              className="transition-all duration-200 hover:scale-105"
+                            >
+                              <Eye className="w-4 h-4 mr-2" />
+                              Voir
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                            <DialogHeader>
+                              <DialogTitle>Détails de la vérification</DialogTitle>
+                              <DialogDescription>
+                                Informations du coiffeur et fichiers soumis
+                              </DialogDescription>
+                            </DialogHeader>
 
-                              <div>
-                                <label className="text-sm font-medium">Fichier de diplôme</label>
-                                {selectedDiploma.diploma_file_url ? (
-                                  <div className="mt-2">
-                                    <Button
-                                      variant="outline"
-                                      onClick={() => window.open(selectedDiploma.diploma_file_url!, '_blank')}
-                                      className="w-full"
-                                    >
-                                      <FileCheck className="w-4 h-4 mr-2" />
-                                      Ouvrir le PDF
-                                    </Button>
+                            {selectedDiploma && (
+                              <div className="space-y-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="text-sm font-medium">Nom du coiffeur</label>
+                                    <p className="text-sm text-muted-foreground">{selectedDiploma.hairdresser.name}</p>
                                   </div>
-                                ) : (
-                                  <p className="text-sm text-muted-foreground mt-2">Aucun fichier disponible</p>
+                                  <div>
+                                    <label className="text-sm font-medium">Téléphone</label>
+                                    <p className="text-sm text-muted-foreground">{selectedDiploma.hairdresser.phone || 'N/A'}</p>
+                                  </div>
+                                  <div>
+                                    <label className="text-sm font-medium">Email</label>
+                                    <p className="text-sm text-muted-foreground">{selectedDiploma.hairdresser.user_id}</p>
+                                  </div>
+                                  <div>
+                                    <label className="text-sm font-medium">Statut actuel</label>
+                                    <p className="text-sm">{selectedDiploma.hairdresser.statut}</p>
+                                  </div>
+                                </div>
+
+                                {/* Type de vérification */}
+                                <div>
+                                  <label className="text-sm font-medium">Type de vérification</label>
+                                  <div className="mt-1">
+                                    {getTypeBadge(selectedDiploma.verification_type)}
+                                  </div>
+                                </div>
+
+                                {/* Fichier principal (diplôme) */}
+                                {selectedDiploma.diploma_file_url && (
+                                  <div>
+                                    <label className="text-sm font-medium">Fichier de diplôme</label>
+                                    <div className="mt-2">
+                                      <Button
+                                        variant="outline"
+                                        onClick={() => window.open(selectedDiploma.diploma_file_url!, '_blank')}
+                                        className="w-full"
+                                      >
+                                        <GraduationCap className="w-4 h-4 mr-2" />
+                                        Ouvrir le diplôme
+                                      </Button>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Fichiers d'expérience */}
+                                {selectedDiploma.experience_file_urls && selectedDiploma.experience_file_urls.length > 0 && (
+                                  <div>
+                                    <label className="text-sm font-medium">
+                                      Justificatifs d&apos;expérience ({selectedDiploma.experience_file_urls.length} fichier{selectedDiploma.experience_file_urls.length > 1 ? 's' : ''})
+                                    </label>
+                                    <div className="mt-2 space-y-2">
+                                      {selectedDiploma.experience_file_urls.map((url, index) => (
+                                        <Button
+                                          key={index}
+                                          variant="outline"
+                                          onClick={() => window.open(url, '_blank')}
+                                          className="w-full"
+                                        >
+                                          <FileText className="w-4 h-4 mr-2" />
+                                          Fichier {index + 1}
+                                        </Button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Aucun fichier */}
+                                {!selectedDiploma.diploma_file_url && (!selectedDiploma.experience_file_urls || selectedDiploma.experience_file_urls.length === 0) && (
+                                  <div>
+                                    <label className="text-sm font-medium">Fichiers</label>
+                                    <p className="text-sm text-muted-foreground mt-2">Aucun fichier disponible</p>
+                                  </div>
+                                )}
+
+                                <div>
+                                  <label className="text-sm font-medium">Attestation acceptée</label>
+                                  <p className="text-sm text-muted-foreground">
+                                    {selectedDiploma.has_accepted_attestation ? 'Oui' : 'Non'}
+                                  </p>
+                                </div>
+
+                                {selectedDiploma.rejection_reason && (
+                                  <div>
+                                    <label className="text-sm font-medium">Raison du rejet</label>
+                                    <p className="text-sm text-muted-foreground">{selectedDiploma.rejection_reason}</p>
+                                  </div>
+                                )}
+
+                                {selectedDiploma.verification_status === 'pending' && (
+                                  <div>
+                                    <label className="text-sm font-medium">Raison du rejet (obligatoire pour rejeter)</label>
+                                    <Input
+                                      placeholder="Ex: Document illisible, diplôme non reconnu..."
+                                      value={rejectionReason}
+                                      onChange={(e) => setRejectionReason(e.target.value)}
+                                      className="mt-1"
+                                    />
+                                  </div>
                                 )}
                               </div>
-
-                              <div>
-                                <label className="text-sm font-medium">Attestation acceptée</label>
-                                <p className="text-sm text-muted-foreground">
-                                  {selectedDiploma.has_accepted_attestation ? 'Oui' : 'Non'}
-                                </p>
-                              </div>
-
-                              {selectedDiploma.rejection_reason && (
-                                <div>
-                                  <label className="text-sm font-medium">Raison du rejet</label>
-                                  <p className="text-sm text-muted-foreground">{selectedDiploma.rejection_reason}</p>
-                                </div>
-                              )}
-
-                              {selectedDiploma.verification_status === 'pending' && (
-                                <div>
-                                  <label className="text-sm font-medium">Raison du rejet (obligatoire pour rejeter)</label>
-                                  <Input
-                                    placeholder="Ex: Document illisible, diplôme non reconnu..."
-                                    value={rejectionReason}
-                                    onChange={(e) => setRejectionReason(e.target.value)}
-                                    className="mt-1"
-                                  />
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          <DialogFooter className="flex-col sm:flex-row gap-2">
-                            {selectedDiploma?.verification_status === 'pending' && (
-                              <>
-                                <Button
-                                  variant="destructive"
-                                  onClick={() => handleReject(selectedDiploma.id)}
-                                  disabled={actionLoading || !rejectionReason.trim()}
-                                  className="transition-all duration-200 hover:scale-105"
-                                >
-                                  <XCircle className="w-4 h-4 mr-2" />
-                                  Rejeter
-                                </Button>
-                                <Button
-                                  onClick={() => handleApprove(selectedDiploma.id)}
-                                  disabled={actionLoading}
-                                  className="transition-all duration-200 hover:scale-105"
-                                >
-                                  <CheckCircle className="w-4 h-4 mr-2" />
-                                  Approuver
-                                </Button>
-                              </>
                             )}
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                    </TableCell>
-                  </motion.tr>
-                ))}
+
+                            <DialogFooter className="flex-col sm:flex-row gap-2">
+                              {selectedDiploma?.verification_status === 'pending' && (
+                                <>
+                                  <Button
+                                    variant="destructive"
+                                    onClick={() => handleReject(selectedDiploma.id)}
+                                    disabled={actionLoading || !rejectionReason.trim()}
+                                    className="transition-all duration-200 hover:scale-105"
+                                  >
+                                    <XCircle className="w-4 h-4 mr-2" />
+                                    Rejeter
+                                  </Button>
+                                  <Button
+                                    onClick={() => handleApprove(selectedDiploma.id)}
+                                    disabled={actionLoading}
+                                    className="transition-all duration-200 hover:scale-105"
+                                  >
+                                    <CheckCircle className="w-4 h-4 mr-2" />
+                                    Approuver
+                                  </Button>
+                                </>
+                              )}
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                      </TableCell>
+                    </motion.tr>
+                  )
+                })}
               </TableBody>
             </Table>
           </div>
@@ -398,40 +490,6 @@ export default function DiplomasPage() {
           )}
         </CardContent>
       </Card>
-
-      {/* Rejection Reason Dialog */}
-      <Dialog>
-        <DialogTrigger asChild>
-          <div className="hidden" />
-        </DialogTrigger>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Raison du rejet</DialogTitle>
-            <DialogDescription>
-              Veuillez indiquer la raison du rejet de ce diplôme
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">Raison</label>
-              <Input
-                placeholder="Ex: Document illisible, diplôme non reconnu..."
-                value={rejectionReason}
-                onChange={(e) => setRejectionReason(e.target.value)}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="destructive"
-              onClick={() => selectedDiploma && handleReject(selectedDiploma.id)}
-              disabled={actionLoading || !rejectionReason.trim()}
-            >
-              Confirmer le rejet
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

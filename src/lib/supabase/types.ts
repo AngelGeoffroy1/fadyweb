@@ -256,6 +256,7 @@ export type Database = {
         Row: {
           created_at: string | null
           diploma_file_url: string | null
+          experience_file_urls: string[] | null
           hairdresser_id: string
           has_accepted_attestation: boolean
           id: string
@@ -263,11 +264,13 @@ export type Database = {
           submitted_at: string | null
           updated_at: string | null
           verification_status: string
+          verification_type: string
           verified_at: string | null
         }
         Insert: {
           created_at?: string | null
           diploma_file_url?: string | null
+          experience_file_urls?: string[] | null
           hairdresser_id: string
           has_accepted_attestation?: boolean
           id?: string
@@ -275,11 +278,13 @@ export type Database = {
           submitted_at?: string | null
           updated_at?: string | null
           verification_status?: string
+          verification_type?: string
           verified_at?: string | null
         }
         Update: {
           created_at?: string | null
           diploma_file_url?: string | null
+          experience_file_urls?: string[] | null
           hairdresser_id?: string
           has_accepted_attestation?: boolean
           id?: string
@@ -287,6 +292,7 @@ export type Database = {
           submitted_at?: string | null
           updated_at?: string | null
           verification_status?: string
+          verification_type?: string
           verified_at?: string | null
         }
         Relationships: [

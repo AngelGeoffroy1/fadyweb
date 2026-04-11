@@ -2,15 +2,17 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/browser'
+import { fetchAllPaginated } from '@/lib/supabase/pagination'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { motion } from 'framer-motion'
-import { Scissors, Search, Star, MapPin, Phone, Calendar, Euro, Eye, Mail, MoreVertical, EyeOff } from 'lucide-react'
+import { Scissors, Search, Star, MapPin, Phone, Calendar, Euro, Eye, Mail, MoreVertical, EyeOff, CheckCircle2, XCircle } from 'lucide-react'
 import { Database } from '@/lib/supabase/types'
 import { Button } from '@/components/ui/button'
+import { Pagination } from '@/components/ui/pagination'
 import { useRouter } from 'next/navigation'
 import {
   DropdownMenu,
@@ -19,12 +21,15 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
-type Hairdresser = Database['public']['Tables']['hairdressers']['Row'] & {
+type HairdresserRow = Database['public']['Tables']['hairdressers']['Row']
+type Hairdresser = HairdresserRow & {
   bookings_count?: number
   total_revenue?: number
   email?: string
   is_invisible?: boolean
 }
+
+type VisibilityFilter = 'all' | 'visible' | 'hidden'
 
 export default function HairdressersPage() {
   const [hairdressers, setHairdressers] = useState<Hairdresser[]>([])
@@ -32,6 +37,9 @@ export default function HairdressersPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>('all')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
   const supabase = useMemo(() => createClient(), [])
   const router = useRouter()
 
@@ -41,60 +49,103 @@ export default function HairdressersPage() {
 
   useEffect(() => {
     filterHairdressers()
-  }, [hairdressers, searchTerm, statusFilter])
+  }, [hairdressers, searchTerm, statusFilter, visibilityFilter])
+
+  // Revenir à la page 1 quand les filtres changent
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, statusFilter, visibilityFilter, pageSize])
+
+  // Sous-ensemble paginé à afficher
+  const paginatedHairdressers = useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return filteredHairdressers.slice(start, start + pageSize)
+  }, [filteredHairdressers, currentPage, pageSize])
 
   const fetchHairdressers = async () => {
     try {
-      // Récupérer les coiffeurs avec leurs statistiques
-      const { data: hairdressersData, error: hairdressersError } = await supabase
-        .from('hairdressers')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      if (hairdressersError) throw hairdressersError
-
-      // Récupérer les statistiques de réservations et email pour chaque coiffeur
-      const hairdressersWithStats = await Promise.all(
-        (hairdressersData || []).map(async (hairdresser) => {
-          // Récupérer les statistiques de réservations
-          const { data: bookingsData } = await supabase
-            .from('bookings')
-            .select('total_price, status')
-            .eq('hairdresser_id', hairdresser.id)
-
-          const bookingsCount = bookingsData?.length || 0
-          const totalRevenue = bookingsData
-            ?.filter(b => b.status === 'completed')
-            .reduce((sum, booking) => sum + booking.total_price, 0) || 0
-
-          // Récupérer l'email de l'utilisateur associé
-          let email = undefined
-          if (hairdresser.user_id) {
-            const { data: userData } = await supabase
-              .from('users')
-              .select('email')
-              .eq('id', hairdresser.user_id)
-              .single()
-
-            email = userData?.email
-          }
-
-          // Récupérer le statut de visibilité
-          const { data: invisibilityData } = await supabase
-            .from('invisible_hairdressers')
-            .select('is_invisible')
-            .eq('hairdresser_id', hairdresser.id)
-            .maybeSingle()
-
-          return {
-            ...hairdresser,
-            bookings_count: bookingsCount,
-            total_revenue: totalRevenue,
-            email,
-            is_invisible: invisibilityData?.is_invisible || false
-          }
-        })
+      // 1. Récupérer TOUS les coiffeurs avec pagination (contourne la limite de 1000)
+      const hairdressersData = await fetchAllPaginated<HairdresserRow>((from, to) =>
+        supabase
+          .from('hairdressers')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(from, to)
       )
+
+      if (hairdressersData.length === 0) {
+        setHairdressers([])
+        return
+      }
+
+      const hairdresserIds = hairdressersData.map(h => h.id)
+      const userIds = hairdressersData
+        .map(h => h.user_id)
+        .filter((id): id is string => id !== null)
+
+      // 2. Récupérer TOUTES les réservations de ces coiffeurs en une seule requête paginée
+      //    puis agréger côté client (évite N+1 requêtes).
+      const bookings = await fetchAllPaginated<{
+        hairdresser_id: string | null
+        total_price: number
+        status: string | null
+      }>((from, to) =>
+        supabase
+          .from('bookings')
+          .select('hairdresser_id, total_price, status')
+          .in('hairdresser_id', hairdresserIds)
+          .range(from, to)
+      )
+
+      const statsByHairdresser = new Map<string, { count: number; revenue: number }>()
+      for (const booking of bookings) {
+        if (!booking.hairdresser_id) continue
+        const current = statsByHairdresser.get(booking.hairdresser_id) || { count: 0, revenue: 0 }
+        current.count += 1
+        if (booking.status === 'completed') {
+          current.revenue += booking.total_price || 0
+        }
+        statsByHairdresser.set(booking.hairdresser_id, current)
+      }
+
+      // 3. Récupérer tous les emails correspondants en une seule requête paginée
+      const emailRows = userIds.length > 0
+        ? await fetchAllPaginated<{ id: string; email: string }>((from, to) =>
+            supabase
+              .from('users')
+              .select('id, email')
+              .in('id', userIds)
+              .range(from, to)
+          )
+        : []
+      const emailByUserId = new Map(emailRows.map(u => [u.id, u.email]))
+
+      // 4. Récupérer les overrides admin (invisible_hairdressers)
+      const invisibilityRows = await fetchAllPaginated<{
+        hairdresser_id: string
+        is_invisible: boolean
+      }>((from, to) =>
+        supabase
+          .from('invisible_hairdressers')
+          .select('hairdresser_id, is_invisible')
+          .in('hairdresser_id', hairdresserIds)
+          .range(from, to)
+      )
+      const invisibilityMap = new Map(
+        invisibilityRows.map(row => [row.hairdresser_id, row.is_invisible])
+      )
+
+      // 5. Assembler les résultats finaux
+      const hairdressersWithStats: Hairdresser[] = hairdressersData.map(hairdresser => {
+        const stats = statsByHairdresser.get(hairdresser.id) || { count: 0, revenue: 0 }
+        return {
+          ...hairdresser,
+          bookings_count: stats.count,
+          total_revenue: stats.revenue,
+          email: hairdresser.user_id ? emailByUserId.get(hairdresser.user_id) : undefined,
+          is_invisible: invisibilityMap.get(hairdresser.id) || false,
+        }
+      })
 
       setHairdressers(hairdressersWithStats)
     } catch (error) {
@@ -120,6 +171,14 @@ export default function HairdressersPage() {
     // Filtre par statut
     if (statusFilter !== 'all') {
       filtered = filtered.filter(hairdresser => hairdresser.statut === statusFilter)
+    }
+
+    // Filtre par visibilité (basé sur la colonne hairdressers.is_visible calculée
+    // automatiquement par recalculate_hairdresser_visibility côté Postgres)
+    if (visibilityFilter === 'visible') {
+      filtered = filtered.filter(hairdresser => hairdresser.is_visible === true)
+    } else if (visibilityFilter === 'hidden') {
+      filtered = filtered.filter(hairdresser => hairdresser.is_visible !== true)
     }
 
     setFilteredHairdressers(filtered)
@@ -278,6 +337,19 @@ export default function HairdressersPage() {
                 <SelectItem value="Amateur">Amateurs</SelectItem>
               </SelectContent>
             </Select>
+            <Select
+              value={visibilityFilter}
+              onValueChange={(value) => setVisibilityFilter(value as VisibilityFilter)}
+            >
+              <SelectTrigger className="w-full sm:w-56">
+                <SelectValue placeholder="Filtrer par visibilité" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes les visibilités</SelectItem>
+                <SelectItem value="visible">Visibles dans l'app</SelectItem>
+                <SelectItem value="hidden">Non visibles</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>
@@ -303,6 +375,7 @@ export default function HairdressersPage() {
                   <TableHead>Téléphone</TableHead>
                   <TableHead>Adresse</TableHead>
                   <TableHead>Statut</TableHead>
+                  <TableHead>Visibilité</TableHead>
                   <TableHead>Note</TableHead>
                   <TableHead>Réservations</TableHead>
                   <TableHead>Revenus</TableHead>
@@ -311,7 +384,7 @@ export default function HairdressersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredHairdressers.map((hairdresser) => (
+                {paginatedHairdressers.map((hairdresser) => (
                   <motion.tr
                     key={hairdresser.id}
                     initial={{ opacity: 0 }}
@@ -349,6 +422,19 @@ export default function HairdressersPage() {
                       </div>
                     </TableCell>
                     <TableCell>{getStatusBadge(hairdresser.statut)}</TableCell>
+                    <TableCell>
+                      {hairdresser.is_visible ? (
+                        <Badge variant="default" className="bg-green-100 text-green-800 flex items-center gap-1 w-fit">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Visible
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 flex items-center gap-1 w-fit">
+                          <XCircle className="w-3 h-3" />
+                          {hairdresser.is_invisible ? 'Masqué admin' : 'Non visible'}
+                        </Badge>
+                      )}
+                    </TableCell>
                     <TableCell>{getRatingStars(hairdresser.rating)}</TableCell>
                     <TableCell>
                       <div className="flex items-center space-x-2">
@@ -413,6 +499,16 @@ export default function HairdressersPage() {
               <Scissors className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">Aucun coiffeur trouvé</p>
             </div>
+          )}
+
+          {filteredHairdressers.length > 0 && (
+            <Pagination
+              currentPage={currentPage}
+              totalItems={filteredHairdressers.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+            />
           )}
         </CardContent>
       </Card>

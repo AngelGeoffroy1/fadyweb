@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/browser'
+import { fetchAllPaginated } from '@/lib/supabase/pagination'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -88,26 +89,28 @@ export default function AmbassadorsPage() {
 
   const fetchAmbassadors = async () => {
     try {
-      const { data, error } = await supabase
-        .from('ambassador_whitelist')
-        .select(`
-          *,
-          hairdressers (
-            name,
-            avatar_url,
-            phone,
-            user_id
-          ),
-          admins!ambassador_whitelist_added_by_admin_id_fkey (
-            user_id
-          )
-        `)
-        .order('added_at', { ascending: false })
-
-      if (error) throw error
+      // Pagination pour contourner la limite de 1000 lignes
+      const data = await fetchAllPaginated<any>((from, to) =>
+        supabase
+          .from('ambassador_whitelist')
+          .select(`
+            *,
+            hairdressers (
+              name,
+              avatar_url,
+              phone,
+              user_id
+            ),
+            admins!ambassador_whitelist_added_by_admin_id_fkey (
+              user_id
+            )
+          `)
+          .order('added_at', { ascending: false })
+          .range(from, to)
+      )
 
       // Récupérer les emails des utilisateurs pour les coiffeurs et admins
-      const enrichedData = await Promise.all((data || []).map(async (ambassador) => {
+      const enrichedData = await Promise.all(data.map(async (ambassador) => {
         // Email du coiffeur
         if (ambassador.hairdressers?.user_id) {
           const { data: userData } = await supabase

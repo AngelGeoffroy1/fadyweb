@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/browser'
+import { fetchAllPaginated } from '@/lib/supabase/pagination'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -229,55 +230,63 @@ export default function NotificationsPage() {
       const list: BroadcastRecipient[] = []
 
       if (broadcastTarget === 'all_clients' || broadcastTarget === 'all') {
-        // Fetch clients who have device tokens
-        const { data: tokens } = await supabase
-          .from('user_device_tokens')
-          .select('user_id')
+        // Fetch clients who have device tokens — pagination pour contourner la limite de 1000
+        const tokens = await fetchAllPaginated<{ user_id: string }>((from, to) =>
+          supabase
+            .from('user_device_tokens')
+            .select('user_id')
+            .range(from, to)
+        )
 
-        if (tokens && tokens.length > 0) {
+        if (tokens.length > 0) {
           const uniqueUserIds = [...new Set(tokens.map(t => t.user_id))]
-          const { data: users } = await supabase
-            .from('users')
-            .select('id, full_name, email')
-            .in('id', uniqueUserIds)
+          const users = await fetchAllPaginated<{ id: string; full_name: string | null; email: string | null }>((from, to) =>
+            supabase
+              .from('users')
+              .select('id, full_name, email')
+              .in('id', uniqueUserIds)
+              .range(from, to)
+          )
 
-          if (users) {
-            for (const u of users) {
-              list.push({
-                userId: u.id,
-                name: u.full_name || 'Sans nom',
-                detail: u.email || '',
-                type: 'client',
-                checked: true,
-              })
-            }
+          for (const u of users) {
+            list.push({
+              userId: u.id,
+              name: u.full_name || 'Sans nom',
+              detail: u.email || '',
+              type: 'client',
+              checked: true,
+            })
           }
         }
       }
 
       if (broadcastTarget === 'all_hairdressers' || broadcastTarget === 'all') {
-        const { data: tokens } = await supabase
-          .from('fady_pro_device_tokens')
-          .select('user_id')
+        const tokens = await fetchAllPaginated<{ user_id: string }>((from, to) =>
+          supabase
+            .from('fady_pro_device_tokens')
+            .select('user_id')
+            .range(from, to)
+        )
 
-        if (tokens && tokens.length > 0) {
+        if (tokens.length > 0) {
           const uniqueUserIds = [...new Set(tokens.map(t => t.user_id))]
-          const { data: hairdressers } = await supabase
-            .from('hairdressers')
-            .select('user_id, name, phone')
-            .in('user_id', uniqueUserIds)
+          const hairdressers = await fetchAllPaginated<{ user_id: string | null; name: string; phone: string | null }>((from, to) =>
+            supabase
+              .from('hairdressers')
+              .select('user_id, name, phone')
+              .in('user_id', uniqueUserIds)
+              .range(from, to)
+          )
 
-          if (hairdressers) {
-            for (const h of hairdressers) {
-              if (h.user_id) {
-                list.push({
-                  userId: h.user_id,
-                  name: h.name,
-                  detail: h.phone || '',
-                  type: 'hairdresser',
-                  checked: true,
-                })
-              }
+          for (const h of hairdressers) {
+            if (h.user_id) {
+              list.push({
+                userId: h.user_id,
+                name: h.name,
+                detail: h.phone || '',
+                type: 'hairdresser',
+                checked: true,
+              })
             }
           }
         }

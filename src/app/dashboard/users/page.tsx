@@ -2,11 +2,13 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/browser'
+import { fetchAllPaginated } from '@/lib/supabase/pagination'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Pagination } from '@/components/ui/pagination'
 import { motion } from 'framer-motion'
 import { Users, Search, Mail, Phone, Calendar, Eye, Scissors, User } from 'lucide-react'
 import { Database } from '@/lib/supabase/types'
@@ -21,6 +23,8 @@ export default function UsersPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [userTypeFilter, setUserTypeFilter] = useState<'all' | 'hairdresser' | 'client'>('all')
   const [hairdresserUserIds, setHairdresserUserIds] = useState<Set<string>>(new Set())
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
   const supabase = useMemo(() => createClient(), [])
   const router = useRouter()
 
@@ -32,29 +36,42 @@ export default function UsersPage() {
     filterUsers()
   }, [users, searchTerm, userTypeFilter, hairdresserUserIds])
 
+  // Revenir à la page 1 quand les filtres changent
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, userTypeFilter, pageSize])
+
+  // Sous-ensemble paginé à afficher
+  const paginatedUsers = useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return filteredUsers.slice(start, start + pageSize)
+  }, [filteredUsers, currentPage, pageSize])
+
   const fetchUsers = async () => {
     try {
-      // Récupérer les utilisateurs
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .order('created_at', { ascending: false })
+      // Récupérer TOUS les utilisateurs avec pagination (contourne la limite de 1000)
+      const allUsers = await fetchAllPaginated<User>((from, to) =>
+        supabase
+          .from('users')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(from, to)
+      )
+      setUsers(allUsers)
 
-      if (error) throw error
-      setUsers(data || [])
-
-      // Récupérer les IDs des coiffeurs
-      const { data: hairdressers, error: hairdressersError } = await supabase
-        .from('hairdressers')
-        .select('user_id')
-
-      if (hairdressersError) throw hairdressersError
+      // Récupérer TOUS les user_ids des coiffeurs (pagination aussi par sécurité)
+      const hairdressers = await fetchAllPaginated<{ user_id: string | null }>((from, to) =>
+        supabase
+          .from('hairdressers')
+          .select('user_id')
+          .range(from, to)
+      )
 
       // Créer un Set des user_ids qui sont coiffeurs
       const hairdresserIds = new Set(
         hairdressers
-          ?.map(h => h.user_id)
-          .filter((id): id is string => id !== null) || []
+          .map(h => h.user_id)
+          .filter((id): id is string => id !== null)
       )
       setHairdresserUserIds(hairdresserIds)
     } catch (error) {
@@ -186,7 +203,7 @@ export default function UsersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredUsers.map((user) => (
+                {paginatedUsers.map((user) => (
                   <motion.tr
                     key={user.id}
                     initial={{ opacity: 0 }}
@@ -282,6 +299,16 @@ export default function UsersPage() {
               <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">Aucun utilisateur trouvé</p>
             </div>
+          )}
+
+          {filteredUsers.length > 0 && (
+            <Pagination
+              currentPage={currentPage}
+              totalItems={filteredUsers.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+            />
           )}
         </CardContent>
       </Card>

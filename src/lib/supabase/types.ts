@@ -537,10 +537,14 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          is_visible: boolean
+          latitude: number | null
+          longitude: number | null
           minimum_interval_time: number
           name: string
           phone: string | null
           rating: number | null
+          slug: string | null
           statut: string | null
           total_reviews: number | null
           user_id: string | null
@@ -556,10 +560,14 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          is_visible?: boolean
+          latitude?: number | null
+          longitude?: number | null
           minimum_interval_time?: number
           name: string
           phone?: string | null
           rating?: number | null
+          slug?: string | null
           statut?: string | null
           total_reviews?: number | null
           user_id?: string | null
@@ -575,10 +583,14 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          is_visible?: boolean
+          latitude?: number | null
+          longitude?: number | null
           minimum_interval_time?: number
           name?: string
           phone?: string | null
           rating?: number | null
+          slug?: string | null
           statut?: string | null
           total_reviews?: number | null
           user_id?: string | null

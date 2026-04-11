@@ -2,7 +2,9 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/browser'
+import { fetchAllPaginated } from '@/lib/supabase/pagination'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Pagination } from '@/components/ui/pagination'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -27,6 +29,8 @@ export default function StripeAccountsPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
   const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
@@ -37,28 +41,38 @@ export default function StripeAccountsPage() {
     filterAccounts()
   }, [accounts, searchTerm, statusFilter])
 
+  // Revenir à la page 1 quand les filtres changent
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, statusFilter, pageSize])
+
+  // Sous-ensemble paginé à afficher
+  const paginatedAccounts = useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return filteredAccounts.slice(start, start + pageSize)
+  }, [filteredAccounts, currentPage, pageSize])
+
   const fetchAccounts = async () => {
     try {
-      const { data, error } = await supabase
-        .from('hairdresser_stripe_accounts')
-        .select(`
-          *,
-          hairdressers (
-            name,
-            phone,
-            user_id
-          )
-        `)
-        .order('created_at', { ascending: false })
-
-      if (error) {
-        console.error('Erreur Supabase:', error)
-        throw error
-      }
+      // Pagination pour contourner la limite de 1000 lignes
+      const data = await fetchAllPaginated<any>((from, to) =>
+        supabase
+          .from('hairdresser_stripe_accounts')
+          .select(`
+            *,
+            hairdressers (
+              name,
+              phone,
+              user_id
+            )
+          `)
+          .order('created_at', { ascending: false })
+          .range(from, to)
+      )
 
       // Enrichir avec email des users si disponible
       const enrichedAccounts = await Promise.all(
-        (data || []).map(async (account) => {
+        data.map(async (account) => {
           // Gérer le cas où hairdressers peut être un tableau ou un objet
           const hairdresserData = Array.isArray(account.hairdressers)
             ? account.hairdressers[0]
@@ -259,7 +273,7 @@ export default function StripeAccountsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredAccounts.map((account) => (
+                {paginatedAccounts.map((account) => (
                   <motion.tr
                     key={account.id}
                     initial={{ opacity: 0 }}
@@ -347,6 +361,16 @@ export default function StripeAccountsPage() {
               <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">Aucun compte trouvé</p>
             </div>
+          )}
+
+          {filteredAccounts.length > 0 && (
+            <Pagination
+              currentPage={currentPage}
+              totalItems={filteredAccounts.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+            />
           )}
         </CardContent>
       </Card>

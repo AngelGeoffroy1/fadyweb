@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/browser'
+import { fetchAllPaginated } from '@/lib/supabase/pagination'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -12,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Pagination } from '@/components/ui/pagination'
 import { Checkbox } from '@/components/ui/checkbox'
 import { motion } from 'framer-motion'
 import { CreditCard, Search, Calendar, TrendingUp, Users, Settings, Gift, UserPlus, Trash2 } from 'lucide-react'
@@ -57,6 +59,8 @@ export default function SubscriptionsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
   const supabase = useMemo(() => createClient(), [])
   const router = useRouter()
   const { toast } = useToast()
@@ -95,6 +99,17 @@ export default function SubscriptionsPage() {
     calculateStats()
   }, [subscriptions, searchTerm, statusFilter, typeFilter])
 
+  // Revenir à la page 1 quand les filtres changent
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, statusFilter, typeFilter, pageSize])
+
+  // Sous-ensemble paginé à afficher
+  const paginatedSubscriptions = useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return filteredSubscriptions.slice(start, start + pageSize)
+  }, [filteredSubscriptions, currentPage, pageSize])
+
   useEffect(() => {
     if (searchHairdresser.length >= 2) {
       searchHairdressers()
@@ -105,23 +120,28 @@ export default function SubscriptionsPage() {
 
   const fetchSubscriptions = async () => {
     try {
-      // Récupérer les abonnements avec les infos des coiffeurs et les commissions
-      const { data: subscriptionsData, error: subscriptionsError } = await supabase
-        .from('hairdresser_subscriptions')
-        .select(`
-          *,
-          hairdressers (
-            name,
-            avatar_url,
-            user_id
-          )
-        `)
-        .order('created_at', { ascending: false })
-
-      if (subscriptionsError) {
-        console.error('Erreur Supabase:', subscriptionsError)
-        throw subscriptionsError
+      // Récupérer TOUS les abonnements avec pagination (contourne la limite de 1000)
+      type RawSubscriptionRow = Subscription & {
+        hairdressers:
+          | { name: string; avatar_url: string | null; user_id: string | null }
+          | { name: string; avatar_url: string | null; user_id: string | null }[]
+          | null
       }
+
+      const subscriptionsData = await fetchAllPaginated<RawSubscriptionRow>((from, to) =>
+        supabase
+          .from('hairdresser_subscriptions')
+          .select(`
+            *,
+            hairdressers (
+              name,
+              avatar_url,
+              user_id
+            )
+          `)
+          .order('created_at', { ascending: false })
+          .range(from, to)
+      )
 
       // Récupérer les pourcentages de commission
       const { data: feesData } = await supabase
@@ -133,13 +153,21 @@ export default function SubscriptionsPage() {
       )
 
       // Enrichir les données avec les commissions
-      const enrichedSubscriptions = (subscriptionsData || []).map(sub => ({
-        ...sub,
-        hairdresser: Array.isArray(sub.hairdressers)
+      const enrichedSubscriptions: Subscription[] = subscriptionsData.map(sub => {
+        const rawHairdresser = Array.isArray(sub.hairdressers)
           ? sub.hairdressers[0]
-          : sub.hairdressers,
-        commission_percentage: feesMap.get(sub.subscription_type)
-      }))
+          : sub.hairdressers
+        return {
+          ...sub,
+          hairdresser: rawHairdresser
+            ? {
+                name: rawHairdresser.name,
+                avatar_url: rawHairdresser.avatar_url ?? undefined,
+              }
+            : undefined,
+          commission_percentage: feesMap.get(sub.subscription_type),
+        }
+      })
 
       setSubscriptions(enrichedSubscriptions)
     } catch (error) {
@@ -785,7 +813,7 @@ export default function SubscriptionsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredSubscriptions.map((subscription) => (
+                {paginatedSubscriptions.map((subscription) => (
                   <motion.tr
                     key={subscription.id}
                     initial={{ opacity: 0 }}
@@ -868,6 +896,16 @@ export default function SubscriptionsPage() {
               <CreditCard className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">Aucun abonnement trouvé</p>
             </div>
+          )}
+
+          {filteredSubscriptions.length > 0 && (
+            <Pagination
+              currentPage={currentPage}
+              totalItems={filteredSubscriptions.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+            />
           )}
         </CardContent>
       </Card>

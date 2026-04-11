@@ -4,7 +4,9 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/browser'
+import { fetchAllPaginated } from '@/lib/supabase/pagination'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Pagination } from '@/components/ui/pagination'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -30,6 +32,8 @@ export default function DiplomasPage() {
   const [selectedDiploma, setSelectedDiploma] = useState<DiplomaVerification | null>(null)
   const [rejectionReason, setRejectionReason] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
   const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
@@ -40,18 +44,31 @@ export default function DiplomasPage() {
     filterDiplomas()
   }, [diplomas, searchTerm, statusFilter, typeFilter])
 
+  // Revenir à la page 1 quand les filtres changent
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, statusFilter, typeFilter, pageSize])
+
+  // Sous-ensemble paginé à afficher
+  const paginatedDiplomas = useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return filteredDiplomas.slice(start, start + pageSize)
+  }, [filteredDiplomas, currentPage, pageSize])
+
   const fetchDiplomas = async () => {
     try {
-      const { data, error } = await supabase
-        .from('hairdresser_diploma_verification')
-        .select(`
-          *,
-          hairdresser:hairdressers(*)
-        `)
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
-      setDiplomas(data || [])
+      // Pagination pour contourner la limite de 1000 lignes
+      const data = await fetchAllPaginated<DiplomaVerification>((from, to) =>
+        supabase
+          .from('hairdresser_diploma_verification')
+          .select(`
+            *,
+            hairdresser:hairdressers(*)
+          `)
+          .order('created_at', { ascending: false })
+          .range(from, to)
+      )
+      setDiplomas(data)
     } catch (error) {
       console.error('Erreur lors du chargement des diplômes:', error)
     } finally {
@@ -293,7 +310,7 @@ export default function DiplomasPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredDiplomas.map((diploma) => {
+                {paginatedDiplomas.map((diploma) => {
                   const fileCount = getAllFileUrls(diploma).length
                   return (
                     <motion.tr
@@ -487,6 +504,16 @@ export default function DiplomasPage() {
               <FileCheck className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">Aucune demande de vérification trouvée</p>
             </div>
+          )}
+
+          {filteredDiplomas.length > 0 && (
+            <Pagination
+              currentPage={currentPage}
+              totalItems={filteredDiplomas.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+            />
           )}
         </CardContent>
       </Card>

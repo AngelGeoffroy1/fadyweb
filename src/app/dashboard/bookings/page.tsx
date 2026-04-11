@@ -2,12 +2,14 @@
 
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/browser'
+import { fetchAllPaginated } from '@/lib/supabase/pagination'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Pagination } from '@/components/ui/pagination'
 import { motion } from 'framer-motion'
 import { Calendar, Search, Mail, Phone, Clock, Euro, MapPin, Eye } from 'lucide-react'
 import { Database } from '@/lib/supabase/types'
@@ -32,6 +34,8 @@ export default function BookingsPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
   const supabase = useMemo(() => createClient(), [])
   const router = useRouter()
   const isFetchingRef = useRef(false)
@@ -47,37 +51,50 @@ export default function BookingsPage() {
     setLoading(true)
 
     try {
-      const { data, error } = await supabase
-        .from('bookings')
-        .select(`
-          *,
-          users:user_id(full_name, email, phone),
-          hairdressers:hairdresser_id(name, phone, address),
-          hairdresser_services:service_id(service_name, duration_minutes, price)
-        `)
-        .order('booking_date', { ascending: false })
+      // Récupérer TOUTES les réservations avec pagination (contourne la limite de 1000)
+      type RawBookingRow = Booking & {
+        users: { full_name: string | null; email: string | null; phone: string | null } | null
+        hairdressers: { name: string | null; phone: string | null; address: string | null } | null
+        hairdresser_services: { service_name: string | null; duration_minutes: number | null; price: number | null } | null
+      }
 
-      if (error) throw error
-
-      // Récupérer les informations de visibilité pour tous les coiffeurs
-      const hairdresserIds = [...new Set(data?.map(b => b.hairdresser_id).filter(Boolean))]
-      const { data: invisibilityData } = await supabase
-        .from('invisible_hairdressers')
-        .select('hairdresser_id, is_invisible')
-        .in('hairdresser_id', hairdresserIds)
-
-      const invisibilityMap = new Map(
-        invisibilityData?.map(item => [item.hairdresser_id, item.is_invisible]) || []
+      const data = await fetchAllPaginated<RawBookingRow>((from, to) =>
+        supabase
+          .from('bookings')
+          .select(`
+            *,
+            users:user_id(full_name, email, phone),
+            hairdressers:hairdresser_id(name, phone, address),
+            hairdresser_services:service_id(service_name, duration_minutes, price)
+          `)
+          .order('booking_date', { ascending: false })
+          .range(from, to)
       )
 
-      const transformedBookings: Booking[] = (data || []).map(booking => ({
+      // Récupérer les informations de visibilité pour tous les coiffeurs
+      const hairdresserIds = [...new Set(data.map(b => b.hairdresser_id).filter(Boolean))] as string[]
+      const invisibilityData = hairdresserIds.length > 0
+        ? await fetchAllPaginated<{ hairdresser_id: string; is_invisible: boolean }>((from, to) =>
+            supabase
+              .from('invisible_hairdressers')
+              .select('hairdresser_id, is_invisible')
+              .in('hairdresser_id', hairdresserIds)
+              .range(from, to)
+          )
+        : []
+
+      const invisibilityMap = new Map(
+        invisibilityData.map(item => [item.hairdresser_id, item.is_invisible])
+      )
+
+      const transformedBookings: Booking[] = data.map(booking => ({
         ...booking,
         user_name: booking.users?.full_name || 'N/A',
         user_email: booking.users?.email || 'N/A',
-        user_phone: booking.users?.phone || null,
+        user_phone: booking.users?.phone ?? undefined,
         hairdresser_name: booking.hairdressers?.name || 'Coiffeur inconnu',
-        hairdresser_phone: booking.hairdressers?.phone || null,
-        hairdresser_address: booking.hairdressers?.address || null,
+        hairdresser_phone: booking.hairdressers?.phone ?? undefined,
+        hairdresser_address: booking.hairdressers?.address ?? undefined,
         service_name: booking.hairdresser_services?.service_name || 'Service inconnu',
         duration_minutes: booking.hairdresser_services?.duration_minutes || 0,
         service_price: booking.hairdresser_services?.price || 0,
@@ -118,6 +135,17 @@ export default function BookingsPage() {
   useEffect(() => {
     filterBookings()
   }, [filterBookings])
+
+  // Revenir à la page 1 quand les filtres changent
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, statusFilter, pageSize])
+
+  // Sous-ensemble paginé à afficher
+  const paginatedBookings = useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return filteredBookings.slice(start, start + pageSize)
+  }, [filteredBookings, currentPage, pageSize])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -230,7 +258,7 @@ export default function BookingsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredBookings.map((booking) => (
+                {paginatedBookings.map((booking) => (
                   <motion.tr
                     key={booking.id}
                     initial={{ opacity: 0 }}
@@ -327,6 +355,16 @@ export default function BookingsPage() {
               <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">Aucune réservation trouvée</p>
             </div>
+          )}
+
+          {filteredBookings.length > 0 && (
+            <Pagination
+              currentPage={currentPage}
+              totalItems={filteredBookings.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+            />
           )}
         </CardContent>
       </Card>

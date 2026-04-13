@@ -31,6 +31,21 @@ type Hairdresser = HairdresserRow & {
 
 type VisibilityFilter = 'all' | 'visible' | 'hidden'
 
+const IN_BATCH_SIZE = 100
+
+async function fetchInBatches<T>(
+  ids: string[],
+  queryFn: (batchIds: string[]) => Promise<T[]>
+): Promise<T[]> {
+  const results: T[] = []
+  for (let i = 0; i < ids.length; i += IN_BATCH_SIZE) {
+    const batch = ids.slice(i, i + IN_BATCH_SIZE)
+    const batchResults = await queryFn(batch)
+    results.push(...batchResults)
+  }
+  return results
+}
+
 export default function HairdressersPage() {
   const [hairdressers, setHairdressers] = useState<Hairdresser[]>([])
   const [filteredHairdressers, setFilteredHairdressers] = useState<Hairdresser[]>([])
@@ -83,18 +98,20 @@ export default function HairdressersPage() {
         .map(h => h.user_id)
         .filter((id): id is string => id !== null)
 
-      // 2. Récupérer TOUTES les réservations de ces coiffeurs en une seule requête paginée
-      //    puis agréger côté client (évite N+1 requêtes).
-      const bookings = await fetchAllPaginated<{
-        hairdresser_id: string | null
-        total_price: number
-        status: string | null
-      }>((from, to) =>
-        supabase
-          .from('bookings')
-          .select('hairdresser_id, total_price, status')
-          .in('hairdresser_id', hairdresserIds)
-          .range(from, to)
+      // 2. Récupérer TOUTES les réservations de ces coiffeurs par lots
+      //    (évite les URL trop longues pour PostgREST avec .in())
+      const bookings = await fetchInBatches(hairdresserIds, async (batchIds) =>
+        fetchAllPaginated<{
+          hairdresser_id: string | null
+          total_price: number
+          status: string | null
+        }>((from, to) =>
+          supabase
+            .from('bookings')
+            .select('hairdresser_id, total_price, status')
+            .in('hairdresser_id', batchIds)
+            .range(from, to)
+        )
       )
 
       const statsByHairdresser = new Map<string, { count: number; revenue: number }>()
@@ -108,28 +125,32 @@ export default function HairdressersPage() {
         statsByHairdresser.set(booking.hairdresser_id, current)
       }
 
-      // 3. Récupérer tous les emails correspondants en une seule requête paginée
+      // 3. Récupérer tous les emails correspondants par lots
       const emailRows = userIds.length > 0
-        ? await fetchAllPaginated<{ id: string; email: string }>((from, to) =>
-            supabase
-              .from('users')
-              .select('id, email')
-              .in('id', userIds)
-              .range(from, to)
+        ? await fetchInBatches(userIds, async (batchIds) =>
+            fetchAllPaginated<{ id: string; email: string }>((from, to) =>
+              supabase
+                .from('users')
+                .select('id, email')
+                .in('id', batchIds)
+                .range(from, to)
+            )
           )
         : []
       const emailByUserId = new Map(emailRows.map(u => [u.id, u.email]))
 
-      // 4. Récupérer les overrides admin (invisible_hairdressers)
-      const invisibilityRows = await fetchAllPaginated<{
-        hairdresser_id: string
-        is_invisible: boolean
-      }>((from, to) =>
-        supabase
-          .from('invisible_hairdressers')
-          .select('hairdresser_id, is_invisible')
-          .in('hairdresser_id', hairdresserIds)
-          .range(from, to)
+      // 4. Récupérer les overrides admin (invisible_hairdressers) par lots
+      const invisibilityRows = await fetchInBatches(hairdresserIds, async (batchIds) =>
+        fetchAllPaginated<{
+          hairdresser_id: string
+          is_invisible: boolean
+        }>((from, to) =>
+          supabase
+            .from('invisible_hairdressers')
+            .select('hairdresser_id, is_invisible')
+            .in('hairdresser_id', batchIds)
+            .range(from, to)
+        )
       )
       const invisibilityMap = new Map(
         invisibilityRows.map(row => [row.hairdresser_id, row.is_invisible])

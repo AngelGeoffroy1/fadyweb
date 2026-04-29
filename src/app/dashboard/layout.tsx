@@ -89,6 +89,7 @@ export default function DashboardLayout({
     { name: 'Abonnements', href: '/dashboard/subscriptions', icon: CreditCard },
     { name: 'Ambassadeurs', href: '/dashboard/ambassadors', icon: Crown },
     { name: 'Stripe Connect', href: '/dashboard/stripe-payments', icon: Wallet },
+    { name: 'Virements coiffeurs', href: '/dashboard/payouts', icon: Wallet },
     { name: 'Diplômes', href: '/dashboard/diplomas', icon: FileCheck },
     { name: 'Modération', href: '/dashboard/moderation', icon: Shield },
     { name: 'Notifications', href: '/dashboard/notifications', icon: Bell },

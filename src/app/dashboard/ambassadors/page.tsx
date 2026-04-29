@@ -378,7 +378,7 @@ export default function AmbassadorsPage() {
             <Crown className="w-8 h-8 text-yellow-500" />
             Ambassadeurs
           </h1>
-          <p className="text-muted-foreground">Gestion des coiffeurs ambassadeurs (commission 3%)</p>
+          <p className="text-muted-foreground">Gestion des coiffeurs ambassadeurs (commission 0%)</p>
         </div>
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>

@@ -46,8 +46,15 @@ export function RefundDialog({
   commissionPercentage,
   onRefundSuccess,
 }: RefundDialogProps) {
+  // V2 — 3 modes de prise en charge :
+  //  - barber_pays   : barber absorbe les frais (FADY rend tout, débite le Connect)
+  //  - client_pays   : client absorbe les frais FADY (FADY garde sa part)
+  //  - fady_covers   : FADY absorbe (rien ne touche le barber)
+  // (rétro-compat : keep_platform_commission ≡ client_pays, refund_all ≡ barber_pays)
+  type RefundMode = 'barber_pays' | 'client_pays' | 'fady_covers'
+
   const [refundAmount, setRefundAmount] = useState<string>(totalAmount.toString())
-  const [commissionHandling, setCommissionHandling] = useState<'keep_platform_commission' | 'refund_all'>('keep_platform_commission')
+  const [commissionHandling, setCommissionHandling] = useState<RefundMode>('client_pays')
   const [reason, setReason] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -59,23 +66,28 @@ export function RefundDialog({
 
   let platformKept = 0
   let hairdresserReversed = 0
-  let clientRefunded = parsedAmount
+  const clientRefunded = parsedAmount
 
-  if (commissionHandling === 'keep_platform_commission') {
-    // Calculer la commission proportionnelle au montant remboursé
+  if (commissionHandling === 'client_pays') {
+    // FADY garde sa commission, on récupère la part barber
     const proportionalCommission = (parsedAmount * commissionPercentage) / 100
     platformKept = proportionalCommission
     hairdresserReversed = parsedAmount - proportionalCommission
-  } else {
+  } else if (commissionHandling === 'barber_pays') {
+    // Barber absorbe tout (Connect débité)
     platformKept = 0
     hairdresserReversed = parsedAmount
+  } else {
+    // fady_covers : FADY absorbe, le barber n'est pas touché
+    platformKept = -parsedAmount
+    hairdresserReversed = 0
   }
 
   // Réinitialiser le montant quand le dialog s'ouvre
   useEffect(() => {
     if (open) {
       setRefundAmount(totalAmount.toString())
-      setCommissionHandling('keep_platform_commission')
+      setCommissionHandling('client_pays')
       setReason('')
       setError(null)
     }
@@ -228,19 +240,22 @@ export function RefundDialog({
             />
           </div>
 
-          {/* Gestion de la commission */}
+          {/* Qui supporte les frais */}
           <div className="space-y-1.5">
-            <Label htmlFor="commission-handling" className="text-sm">Gestion de la commission</Label>
-            <Select value={commissionHandling} onValueChange={(value: any) => setCommissionHandling(value)}>
+            <Label htmlFor="commission-handling" className="text-sm">Qui supporte les frais ?</Label>
+            <Select value={commissionHandling} onValueChange={(value: RefundMode) => setCommissionHandling(value)}>
               <SelectTrigger id="commission-handling">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="keep_platform_commission">
-                  Garder la commission Fady ({commissionPercentage}%)
+                <SelectItem value="client_pays">
+                  Client (FADY garde {commissionPercentage}%)
                 </SelectItem>
-                <SelectItem value="refund_all">
-                  Rembourser la commission aussi
+                <SelectItem value="barber_pays">
+                  Coiffeur (frais débités du Connect)
+                </SelectItem>
+                <SelectItem value="fady_covers">
+                  FADY absorbe (geste commercial)
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -281,12 +296,14 @@ export function RefundDialog({
 
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">Fady</span>
-                  <span className="font-medium text-green-600 dark:text-green-400">{platformKept.toFixed(2)} €</span>
+                  <span className={`font-medium ${platformKept < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                    {platformKept >= 0 ? '+' : ''}{platformKept.toFixed(2)} €
+                  </span>
                 </div>
 
                 <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Coiffeur</span>
-                  <span className="font-medium text-red-600 dark:text-red-400">{hairdresserReversed.toFixed(2)} €</span>
+                  <span className="text-muted-foreground">Coiffeur (Connect)</span>
+                  <span className="font-medium text-red-600 dark:text-red-400">−{hairdresserReversed.toFixed(2)} €</span>
                 </div>
               </div>
             </div>

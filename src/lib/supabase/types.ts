@@ -50,15 +50,26 @@ export type Database = {
         Row: {
           address: string | null
           booking_date: string
+          booking_range: unknown | null
           booking_time: string
+          channel: string | null
+          commission_percentage: number | null
           created_at: string
+          duration_minutes: number | null
+          fady_commission_barber: number | null
+          fady_commission_user: number | null
+          funds_available_on: string | null
           hairdresser_id: string
           id: string
           location_type: string
           number_of_cuts: number
           payment_method: string | null
+          payout_logs_id: string | null
+          payout_status: string | null
           service_id: string
           status: string | null
+          stripe_fee: number | null
+          stripe_net: number | null
           stripe_payment_intent_id: string | null
           total_price: number
           user_id: string
@@ -66,15 +77,26 @@ export type Database = {
         Insert: {
           address?: string | null
           booking_date: string
+          booking_range?: unknown | null
           booking_time: string
+          channel?: string | null
+          commission_percentage?: number | null
           created_at?: string
+          duration_minutes?: number | null
+          fady_commission_barber?: number | null
+          fady_commission_user?: number | null
+          funds_available_on?: string | null
           hairdresser_id: string
           id?: string
           location_type: string
           number_of_cuts?: number
           payment_method?: string | null
+          payout_logs_id?: string | null
+          payout_status?: string | null
           service_id: string
           status?: string | null
+          stripe_fee?: number | null
+          stripe_net?: number | null
           stripe_payment_intent_id?: string | null
           total_price: number
           user_id: string
@@ -82,15 +104,26 @@ export type Database = {
         Update: {
           address?: string | null
           booking_date?: string
+          booking_range?: unknown | null
           booking_time?: string
+          channel?: string | null
+          commission_percentage?: number | null
           created_at?: string
+          duration_minutes?: number | null
+          fady_commission_barber?: number | null
+          fady_commission_user?: number | null
+          funds_available_on?: string | null
           hairdresser_id?: string
           id?: string
           location_type?: string
           number_of_cuts?: number
           payment_method?: string | null
+          payout_logs_id?: string | null
+          payout_status?: string | null
           service_id?: string
           status?: string | null
+          stripe_fee?: number | null
+          stripe_net?: number | null
           stripe_payment_intent_id?: string | null
           total_price?: number
           user_id?: string
@@ -101,6 +134,13 @@ export type Database = {
             columns: ["hairdresser_id"]
             isOneToOne: false
             referencedRelation: "hairdressers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_payout_logs_id_fkey"
+            columns: ["payout_logs_id"]
+            isOneToOne: false
+            referencedRelation: "payout_logs"
             referencedColumns: ["id"]
           },
           {
@@ -115,6 +155,50 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payout_logs: {
+        Row: {
+          amount: number
+          bookings_count: number
+          created_at: string | null
+          date_virement: string
+          hairdresser_id: string
+          id: string
+          payout_status: string
+          stripe_transfer_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          amount: number
+          bookings_count?: number
+          created_at?: string | null
+          date_virement?: string
+          hairdresser_id: string
+          id?: string
+          payout_status?: string
+          stripe_transfer_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number
+          bookings_count?: number
+          created_at?: string | null
+          date_virement?: string
+          hairdresser_id?: string
+          id?: string
+          payout_status?: string
+          stripe_transfer_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payout_logs_hairdresser_id_fkey"
+            columns: ["hairdresser_id"]
+            isOneToOne: false
+            referencedRelation: "hairdressers"
             referencedColumns: ["id"]
           },
         ]

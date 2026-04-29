@@ -19,6 +19,50 @@ type RefundMode =
   | 'barber_pays' | 'client_pays' | 'fady_covers'
   | 'keep_platform_commission' | 'refund_all';
 
+async function reversePaidV2PayoutIfNeeded(
+  supabase: any,
+  stripe: Stripe,
+  booking: any,
+  refundId: string,
+  amountEuros: number,
+  idempotencyKey: string,
+) {
+  if (booking.payout_status !== 'paid' || !booking.payout_logs_id || amountEuros <= 0) {
+    return null;
+  }
+
+  const { data: payoutLog, error } = await supabase
+    .from('payout_logs')
+    .select('stripe_transfer_id')
+    .eq('id', booking.payout_logs_id)
+    .maybeSingle();
+  if (error) throw new Error(`Failed to retrieve payout log: ${error.message}`);
+  if (!payoutLog?.stripe_transfer_id) {
+    console.warn(`⚠️ [Admin Refund] Booking ${booking.id} is paid but payout log has no transfer id`);
+    return null;
+  }
+
+  const transfer = await stripe.transfers.retrieve(payoutLog.stripe_transfer_id);
+  const remainingCents = Math.max(0, (transfer.amount ?? 0) - ((transfer as any).amount_reversed ?? 0));
+  const reversalCents = Math.min(Math.round(amountEuros * 100), remainingCents);
+  if (reversalCents <= 0) {
+    console.warn(`⚠️ [Admin Refund] Transfer ${payoutLog.stripe_transfer_id} has no reversible amount`);
+    return null;
+  }
+
+  const reversal = await stripe.transfers.createReversal(payoutLog.stripe_transfer_id, {
+    amount: reversalCents,
+    metadata: {
+      booking_id: booking.id,
+      refund_id: refundId,
+      source: 'admin_refund_v2',
+    },
+  }, { idempotencyKey });
+
+  console.log(`✅ [Admin Refund] V2 transfer reversal créé: ${reversal.id} (${(reversalCents / 100).toFixed(2)}€)`);
+  return reversal;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -146,6 +190,18 @@ Deno.serve(async (req) => {
 
     console.log('✅ [Admin Refund] Stripe refund:', refund.id);
 
+    if (isV2 && hairdresserAmountReversed > 0) {
+      const reversal = await reversePaidV2PayoutIfNeeded(
+        supabase,
+        stripe,
+        booking,
+        refund.id,
+        hairdresserAmountReversed,
+        `admin_v2_reversal_${bookingId}_${refund.id}`,
+      );
+      if (reversal?.amount) hairdresserAmountReversed = round2(reversal.amount / 100);
+    }
+
     // V1 legacy : transfer reversal manuel pour la part barber si applicable
     if (!isV2 && (commissionHandling === 'keep_platform_commission' || commissionHandling === 'client_pays')
         && hairdresserAmountReversed > 0 && reverseTransfer === false) {
@@ -158,7 +214,7 @@ Deno.serve(async (req) => {
             (t: any) => t.source_transaction === charge || t.metadata?.booking_id === bookingId
           );
           if (relatedTransfer) {
-            await stripe.transferReversals.create(relatedTransfer.id, {
+            await stripe.transfers.createReversal(relatedTransfer.id, {
               amount: Math.round(hairdresserAmountReversed * 100),
               metadata: { booking_id: bookingId, refund_id: refund.id }
             }, { idempotencyKey: `admin_reversal_${bookingId}_${refund.id}` });

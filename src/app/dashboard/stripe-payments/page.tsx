@@ -40,7 +40,9 @@ export default function StripePaymentsDashboard() {
     active_accounts: 0,
     pending_accounts: 0,
     total_transactions: 0,
-    total_volume: 0
+    total_volume: 0,
+    user_fees_collected: 0,
+    retained_balance: 0
   })
   const [recentPayments, setRecentPayments] = useState<PaymentWithDetails[]>([])
   const [accountsNeedingAttention, setAccountsNeedingAttention] = useState<StripeAccount[]>([])
@@ -90,6 +92,15 @@ export default function StripePaymentsDashboard() {
         console.error('Erreur paiements:', paymentsError)
       }
 
+      const { data: bookingsData, error: bookingsError } = await supabase
+        .from('bookings')
+        .select('total_price, fady_commission_user, payout_status, status, channel, funds_available_on')
+        .eq('payment_method', 'card')
+
+      if (bookingsError) {
+        console.error('Erreur bookings financières:', bookingsError)
+      }
+
       // Mapper les données pour avoir un format cohérent
       const payments = (paymentsData || []).map(payment => ({
         ...payment,
@@ -104,13 +115,29 @@ export default function StripePaymentsDashboard() {
       const pendingAccounts = accounts?.filter(a => a.onboarding_status === 'pending').length || 0
       const totalTransactions = payments?.length || 0
       const totalVolume = payments?.reduce((sum, p) => sum + Number(p.amount), 0) || 0
+      const billableBookings = (bookingsData || []).filter(
+        booking =>
+          booking.status !== 'cancelled' &&
+          booking.status !== 'refund' &&
+          booking.channel !== null &&
+          booking.funds_available_on !== null
+      )
+      const userFeesCollected = billableBookings.reduce(
+        (sum, booking) => sum + Number(booking.fady_commission_user || 0),
+        0
+      )
+      const retainedBalance = billableBookings
+        .filter(booking => booking.payout_status === 'pending')
+        .reduce((sum, booking) => sum + Number(booking.total_price || 0), 0)
 
       setStats({
         total_accounts: totalAccounts,
         active_accounts: activeAccounts,
         pending_accounts: pendingAccounts,
         total_transactions: totalTransactions,
-        total_volume: totalVolume
+        total_volume: totalVolume,
+        user_fees_collected: userFeesCollected,
+        retained_balance: retainedBalance
       })
 
       // Derniers paiements (10 derniers)
@@ -172,8 +199,8 @@ export default function StripePaymentsDashboard() {
     return (
       <div className="space-y-6">
         <div className="h-8 bg-muted rounded animate-pulse" />
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map(i => (
+        <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
+          {[1, 2, 3, 4, 5, 6].map(i => (
             <div key={i} className="h-24 bg-muted rounded animate-pulse" />
           ))}
         </div>
@@ -194,7 +221,7 @@ export default function StripePaymentsDashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <Card>
             <CardHeader className="pb-3">
@@ -266,6 +293,44 @@ export default function StripePaymentsDashboard() {
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 Tous paiements confondus
+              </p>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Frais user collectés
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center space-x-2">
+                <Wallet className="w-5 h-5 text-indigo-500" />
+                <span className="text-2xl font-bold">{stats.user_fees_collected.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Bookings non annulées
+              </p>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Solde en rétention
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center space-x-2">
+                <CreditCard className="w-5 h-5 text-orange-500" />
+                <span className="text-2xl font-bold">{stats.retained_balance.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Payouts en attente
               </p>
             </CardContent>
           </Card>

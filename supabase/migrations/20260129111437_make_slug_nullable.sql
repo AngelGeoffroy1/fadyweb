@@ -1,0 +1,1 @@
+ALTER TABLE hairdressers ALTER COLUMN slug DROP NOT NULL;;

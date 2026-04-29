@@ -563,6 +563,8 @@ Deno.serve(async (req: Request) => {
       total_price: bookingTotalPrice,
       stripe_payment_intent_id: data.stripePaymentIntentId || null,
       payment_method: paymentMethod,
+      channel: 'webapp',
+      payout_status: isPaidBooking ? 'pending' : null,
     };
 
     console.log('\u{1F4DD} Creating booking with data:', bookingData);

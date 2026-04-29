@@ -1,0 +1,3 @@
+-- Activer Row Level Security (RLS)
+ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE messages ENABLE ROW LEVEL SECURITY;;

@@ -1,0 +1,1 @@
+ALTER TABLE public.hairdresser_services ADD COLUMN service_type VARCHAR(30) NOT NULL DEFAULT 'AUTRE'; COMMENT ON COLUMN public.hairdresser_services.service_type IS 'Le type du service parmi COUPE PRENIUM, SOIN CAPILAIRE, AUTRE, COUPES HOMME, COUPES FEMME, BARBIER';;

@@ -34,9 +34,9 @@ export const metadata = {
   title: 'Fady Admin Dashboard',
   description: 'Interface d\'administration pour la plateforme Fady',
   icons: {
-    icon: '/favicon.png',
-    shortcut: '/favicon.png',
-    apple: '/icon.png',
+    icon: '/logo-onglet.png',
+    shortcut: '/logo-onglet.png',
+    apple: '/logo-onglet.png',
   },
 }
 

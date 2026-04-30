@@ -1,18 +1,20 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/browser'
 import { fetchAllPaginated } from '@/lib/supabase/pagination'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+import { Switch } from '@/components/ui/switch'
 import { motion } from 'framer-motion'
-import { Crown, Search, UserPlus, Trash2, Calendar, Award } from 'lucide-react'
+import { Crown, Search, UserPlus, Calendar, Award, MoreVertical, BarChart3, Link2, Copy, User, Trash2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
 type Ambassador = {
@@ -28,12 +30,12 @@ type Ambassador = {
     email?: string
     phone?: string
   }
-  admin?: {
-    user_id: string
-    users?: {
-      email: string
-    }
-  }
+  // Données du lien de parrainage (jointure)
+  ambassador_link?: {
+    id: string
+    slug: string
+    is_active: boolean
+  } | null
 }
 
 type Hairdresser = {
@@ -48,6 +50,7 @@ type Hairdresser = {
 }
 
 export default function AmbassadorsPage() {
+  const router = useRouter()
   const [ambassadors, setAmbassadors] = useState<Ambassador[]>([])
   const [filteredAmbassadors, setFilteredAmbassadors] = useState<Ambassador[]>([])
   const [loading, setLoading] = useState(true)
@@ -58,8 +61,19 @@ export default function AmbassadorsPage() {
   const [searchHairdresser, setSearchHairdresser] = useState('')
   const [hairdressers, setHairdressers] = useState<Hairdresser[]>([])
   const [selectedHairdresser, setSelectedHairdresser] = useState<Hairdresser | null>(null)
-  const [reason, setReason] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Modal Configurer lien
+  const [isLinkDialogOpen, setIsLinkDialogOpen] = useState(false)
+  const [linkAmbassador, setLinkAmbassador] = useState<Ambassador | null>(null)
+  const [linkSlug, setLinkSlug] = useState('')
+  const [linkActive, setLinkActive] = useState(true)
+  const [linkSaving, setLinkSaving] = useState(false)
+  const [slugError, setSlugError] = useState('')
+
+  // Modal Retirer
+  const [removeAmbassador, setRemoveAmbassador] = useState<Ambassador | null>(null)
+  const [removing, setRemoving] = useState(false)
 
   const supabase = useMemo(() => createClient(), [])
   const { toast } = useToast()
@@ -89,27 +103,25 @@ export default function AmbassadorsPage() {
 
   const fetchAmbassadors = async () => {
     try {
-      // Pagination pour contourner la limite de 1000 lignes
       const data = await fetchAllPaginated<any>((from, to) =>
         supabase
           .from('ambassador_whitelist')
           .select(`
             *,
             hairdressers (
+              id,
               name,
               avatar_url,
               phone,
               user_id
-            ),
-            admins!ambassador_whitelist_added_by_admin_id_fkey (
-              user_id
             )
           `)
+          .eq('is_active', true)
           .order('added_at', { ascending: false })
           .range(from, to)
       )
 
-      // Récupérer les emails des utilisateurs pour les coiffeurs et admins
+      // Récupérer les emails et les liens de parrainage
       const enrichedData = await Promise.all(data.map(async (ambassador) => {
         // Email du coiffeur
         if (ambassador.hairdressers?.user_id) {
@@ -124,26 +136,20 @@ export default function AmbassadorsPage() {
           }
         }
 
-        // Email de l'admin
-        if (ambassador.admins?.user_id) {
-          const { data: adminData } = await supabase
-            .auth.admin.getUserById(ambassador.admins.user_id)
-
-          if (adminData?.user) {
-            ambassador.admin = {
-              user_id: ambassador.admins.user_id,
-              users: {
-                email: adminData.user.email || ''
-              }
-            }
-          }
-        }
+        // Lien de parrainage
+        const hairdresserId = ambassador.hairdressers?.id || ambassador.hairdresser_id
+        const { data: linkData } = await supabase
+          .from('ambassador_links')
+          .select('id, slug, is_active')
+          .eq('hairdresser_id', hairdresserId)
+          .maybeSingle()
 
         return {
           ...ambassador,
           hairdresser: Array.isArray(ambassador.hairdressers)
             ? ambassador.hairdressers[0]
-            : ambassador.hairdressers
+            : ambassador.hairdressers,
+          ambassador_link: linkData || null,
         }
       }))
 
@@ -164,19 +170,12 @@ export default function AmbassadorsPage() {
     try {
       const { data, error } = await supabase
         .from('hairdressers')
-        .select(`
-          id,
-          name,
-          avatar_url,
-          phone,
-          user_id
-        `)
+        .select(`id, name, avatar_url, phone, user_id`)
         .ilike('name', `%${searchHairdresser}%`)
         .limit(10)
 
       if (error) throw error
 
-      // Récupérer les emails des coiffeurs
       const enrichedData = await Promise.all((data || []).map(async (hairdresser) => {
         if (hairdresser.user_id) {
           const { data: userData } = await supabase
@@ -186,10 +185,7 @@ export default function AmbassadorsPage() {
             .single()
 
           if (userData) {
-            return {
-              ...hairdresser,
-              users: { email: userData.email }
-            }
+            return { ...hairdresser, users: { email: userData.email } }
           }
         }
         return hairdresser
@@ -222,19 +218,15 @@ export default function AmbassadorsPage() {
     })
   }
 
+  // ── Ajouter un ambassadeur (sans raison) ──
   const handleAddAmbassador = async () => {
     if (!selectedHairdresser) {
-      toast({
-        title: 'Erreur',
-        description: 'Veuillez sélectionner un coiffeur',
-        variant: 'destructive',
-      })
+      toast({ title: 'Erreur', description: 'Veuillez sélectionner un coiffeur', variant: 'destructive' })
       return
     }
 
     setIsSubmitting(true)
     try {
-      // Récupérer l'ID de l'admin connecté
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Utilisateur non connecté')
 
@@ -246,30 +238,81 @@ export default function AmbassadorsPage() {
 
       if (!adminData) throw new Error('Admin non trouvé')
 
-      // Vérifier si le coiffeur n'est pas déjà ambassadeur
+      // Vérifier si déjà ambassadeur (seulement les actifs)
       const { data: existing } = await supabase
         .from('ambassador_whitelist')
-        .select('id')
+        .select('id, is_active')
         .eq('hairdresser_id', selectedHairdresser.id)
-        .single()
+        .maybeSingle()
 
-      if (existing) {
-        toast({
-          title: 'Erreur',
-          description: 'Ce coiffeur est déjà ambassadeur',
-          variant: 'destructive',
-        })
+      if (existing && existing.is_active) {
+        toast({ title: 'Erreur', description: 'Ce coiffeur est déjà ambassadeur', variant: 'destructive' })
         setIsSubmitting(false)
         return
       }
 
-      // Ajouter à la whitelist
+      // Si existait mais inactif → réactiver
+      if (existing && !existing.is_active) {
+        const { error: reactivateError } = await supabase
+          .from('ambassador_whitelist')
+          .update({ is_active: true, added_by_admin_id: adminData.id })
+          .eq('id', existing.id)
+
+        if (reactivateError) throw reactivateError
+
+        // Réactiver aussi le lien s'il existe
+        await supabase
+          .from('ambassador_links')
+          .update({ is_active: true })
+          .eq('hairdresser_id', selectedHairdresser.id)
+
+        // Réactiver ou créer l'abonnement
+        const { data: existingSub } = await supabase
+          .from('hairdresser_subscriptions')
+          .select('id')
+          .eq('hairdresser_id', selectedHairdresser.id)
+          .eq('subscription_type', 'ambassador')
+          .maybeSingle()
+
+        if (existingSub) {
+          await supabase
+            .from('hairdresser_subscriptions')
+            .update({
+              status: 'active',
+              current_period_start: new Date().toISOString(),
+              current_period_end: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+            })
+            .eq('id', existingSub.id)
+        } else {
+          const { error: subscriptionError } = await supabase
+            .from('hairdresser_subscriptions')
+            .insert({
+              hairdresser_id: selectedHairdresser.id,
+              subscription_type: 'ambassador',
+              status: 'active',
+              current_period_start: new Date().toISOString(),
+              current_period_end: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+              is_gifted: true,
+              gifted_by_admin_id: adminData.id,
+              gifted_reason: 'Programme Ambassadeur',
+            })
+          if (subscriptionError) throw subscriptionError
+        }
+
+        toast({ title: 'Succès', description: 'Ambassadeur réactivé avec succès' })
+        setIsAddDialogOpen(false)
+        setSelectedHairdresser(null)
+        setSearchHairdresser('')
+        fetchAmbassadors()
+        return
+      }
+
+      // Ajouter à la whitelist (sans raison)
       const { error: whitelistError } = await supabase
         .from('ambassador_whitelist')
         .insert({
           hairdresser_id: selectedHairdresser.id,
           added_by_admin_id: adminData.id,
-          reason: reason || null,
           is_active: true,
         })
 
@@ -283,76 +326,166 @@ export default function AmbassadorsPage() {
           subscription_type: 'ambassador',
           status: 'active',
           current_period_start: new Date().toISOString(),
-          current_period_end: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // +1 an
+          current_period_end: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
           is_gifted: true,
           gifted_by_admin_id: adminData.id,
-          gifted_reason: reason || 'Programme Ambassadeur',
+          gifted_reason: 'Programme Ambassadeur',
         })
 
       if (subscriptionError) throw subscriptionError
 
-      toast({
-        title: 'Succès',
-        description: 'Ambassadeur ajouté avec succès',
-      })
+      toast({ title: 'Succès', description: 'Ambassadeur ajouté avec succès' })
 
-      // Réinitialiser le formulaire
       setIsAddDialogOpen(false)
       setSelectedHairdresser(null)
-      setReason('')
       setSearchHairdresser('')
-
-      // Recharger la liste
       fetchAmbassadors()
     } catch (error) {
-      console.error('Erreur lors de l\'ajout de l\'ambassadeur:', error)
-      toast({
-        title: 'Erreur',
-        description: 'Impossible d\'ajouter l\'ambassadeur',
-        variant: 'destructive',
-      })
+      console.error("Erreur lors de l'ajout de l'ambassadeur:", error)
+      toast({ title: 'Erreur', description: "Impossible d'ajouter l'ambassadeur", variant: 'destructive' })
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  const handleRemoveAmbassador = async (ambassadorId: string, hairdresserId: string) => {
-    if (!confirm('Êtes-vous sûr de vouloir retirer ce statut ambassadeur ?')) {
+  // ── Option 2 : Configurer lien ──
+  const openLinkDialog = (ambassador: Ambassador) => {
+    setLinkAmbassador(ambassador)
+    setLinkSlug(ambassador.ambassador_link?.slug || '')
+    setLinkActive(ambassador.ambassador_link?.is_active ?? true)
+    setSlugError('')
+    setIsLinkDialogOpen(true)
+  }
+
+  const handleSaveLink = async () => {
+    if (!linkAmbassador) return
+
+    const slug = linkSlug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '')
+    if (!slug) {
+      setSlugError('Le slug ne peut pas être vide')
       return
     }
 
+    setLinkSaving(true)
+    setSlugError('')
+
     try {
-      // Désactiver dans la whitelist
+      const hairdresserId = linkAmbassador.hairdresser_id
+
+      // Vérifier unicité du slug (sauf si c'est le même ambassadeur)
+      const { data: existingSlug } = await supabase
+        .from('ambassador_links')
+        .select('id, hairdresser_id')
+        .eq('slug', slug)
+        .maybeSingle()
+
+      if (existingSlug && existingSlug.hairdresser_id !== hairdresserId) {
+        setSlugError('Ce slug est déjà utilisé par un autre ambassadeur')
+        setLinkSaving(false)
+        return
+      }
+
+      // Vérifier si un lien existe déjà pour ce coiffeur
+      const { data: currentLink } = await supabase
+        .from('ambassador_links')
+        .select('id')
+        .eq('hairdresser_id', hairdresserId)
+        .maybeSingle()
+
+      if (currentLink) {
+        // Mettre à jour le lien existant
+        const { error } = await supabase
+          .from('ambassador_links')
+          .update({ slug, is_active: linkActive })
+          .eq('id', currentLink.id)
+
+        if (error) throw error
+      } else {
+        // Créer un nouveau lien
+        const { error } = await supabase
+          .from('ambassador_links')
+          .insert({
+            hairdresser_id: hairdresserId,
+            slug,
+            is_active: linkActive,
+          })
+
+        if (error) throw error
+      }
+
+      toast({ title: 'Succès', description: 'Lien de parrainage sauvegardé' })
+      setIsLinkDialogOpen(false)
+      fetchAmbassadors()
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde du lien:', error)
+      toast({ title: 'Erreur', description: 'Impossible de sauvegarder le lien', variant: 'destructive' })
+    } finally {
+      setLinkSaving(false)
+    }
+  }
+
+  // ── Option 3 : Copier le lien ──
+  const handleCopyLink = async (ambassador: Ambassador) => {
+    if (!ambassador.ambassador_link?.slug) {
+      toast({ title: 'Aucun lien configuré', description: 'Utilisez "Configurer lien" pour définir un slug', variant: 'destructive' })
+      return
+    }
+
+    const url = `parrainage.fady-app.fr/${ambassador.ambassador_link.slug}`
+    try {
+      await navigator.clipboard.writeText(url)
+      toast({ title: 'Lien copié !', description: url })
+    } catch {
+      toast({ title: 'Erreur', description: 'Impossible de copier le lien', variant: 'destructive' })
+    }
+  }
+
+  // ── Option 5 : Retirer ──
+  const handleConfirmRemove = async () => {
+    if (!removeAmbassador || removing) return
+
+    setRemoving(true)
+    const errors: string[] = []
+
+    try {
+      // 1. Désactiver dans la whitelist
       const { error: whitelistError } = await supabase
         .from('ambassador_whitelist')
         .update({ is_active: false })
-        .eq('id', ambassadorId)
+        .eq('id', removeAmbassador.id)
 
-      if (whitelistError) throw whitelistError
+      if (whitelistError) errors.push('whitelist')
 
-      // Annuler l'abonnement ambassadeur
+      // 2. Annuler l'abonnement ambassadeur
       const { error: subscriptionError } = await supabase
         .from('hairdresser_subscriptions')
         .update({ status: 'canceled' })
-        .eq('hairdresser_id', hairdresserId)
+        .eq('hairdresser_id', removeAmbassador.hairdresser_id)
         .eq('subscription_type', 'ambassador')
 
-      if (subscriptionError) throw subscriptionError
+      if (subscriptionError) errors.push('abonnement')
 
-      toast({
-        title: 'Succès',
-        description: 'Statut ambassadeur retiré avec succès',
-      })
+      // 3. Désactiver le lien (pas supprimer)
+      const { error: linkError } = await supabase
+        .from('ambassador_links')
+        .update({ is_active: false })
+        .eq('hairdresser_id', removeAmbassador.hairdresser_id)
 
-      // Recharger la liste
+      if (linkError) errors.push('lien')
+
+      if (errors.length > 0) {
+        toast({ title: 'Erreur partielle', description: `Échec sur : ${errors.join(', ')}. Contactez le support.`, variant: 'destructive' })
+      } else {
+        toast({ title: 'Succès', description: 'Statut ambassadeur retiré avec succès' })
+      }
+
+      setRemoveAmbassador(null)
       fetchAmbassadors()
     } catch (error) {
-      console.error('Erreur lors du retrait de l\'ambassadeur:', error)
-      toast({
-        title: 'Erreur',
-        description: 'Impossible de retirer le statut ambassadeur',
-        variant: 'destructive',
-      })
+      console.error("Erreur lors du retrait de l'ambassadeur:", error)
+      toast({ title: 'Erreur', description: 'Impossible de retirer le statut ambassadeur', variant: 'destructive' })
+    } finally {
+      setRemoving(false)
     }
   }
 
@@ -380,7 +513,14 @@ export default function AmbassadorsPage() {
           </h1>
           <p className="text-muted-foreground">Gestion des coiffeurs ambassadeurs (commission 0%)</p>
         </div>
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
+          setIsAddDialogOpen(open)
+          if (!open) {
+            setSelectedHairdresser(null)
+            setSearchHairdresser('')
+            setHairdressers([])
+          }
+        }}>
           <DialogTrigger asChild>
             <Button className="flex items-center space-x-2">
               <UserPlus className="w-4 h-4" />
@@ -476,18 +616,6 @@ export default function AmbassadorsPage() {
                 </div>
               )}
 
-              {/* Raison */}
-              <div className="space-y-2">
-                <Label htmlFor="reason">Raison (optionnel)</Label>
-                <Textarea
-                  id="reason"
-                  placeholder="Ex: Partenaire VIP - Influenceur 10k"
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  rows={3}
-                />
-              </div>
-
               {/* Actions */}
               <div className="flex justify-end space-x-2 pt-4">
                 <Button
@@ -495,7 +623,6 @@ export default function AmbassadorsPage() {
                   onClick={() => {
                     setIsAddDialogOpen(false)
                     setSelectedHairdresser(null)
-                    setReason('')
                     setSearchHairdresser('')
                   }}
                   disabled={isSubmitting}
@@ -579,11 +706,8 @@ export default function AmbassadorsPage() {
                   <TableHead>Coiffeur</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Téléphone</TableHead>
-                  <TableHead>Raison</TableHead>
-                  <TableHead>Ajouté par</TableHead>
                   <TableHead>Date d'ajout</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead className="w-[50px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -620,12 +744,6 @@ export default function AmbassadorsPage() {
                       {ambassador.hairdresser?.phone || 'N/A'}
                     </TableCell>
                     <TableCell>
-                      <span className="text-sm">{ambassador.reason || 'N/A'}</span>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {ambassador.admin?.users?.email || 'N/A'}
-                    </TableCell>
-                    <TableCell>
                       {ambassador.added_at ? (
                         <div className="flex items-center space-x-2">
                           <Calendar className="w-4 h-4 text-muted-foreground" />
@@ -636,24 +754,55 @@ export default function AmbassadorsPage() {
                       ) : 'N/A'}
                     </TableCell>
                     <TableCell>
-                      {ambassador.is_active ? (
-                        <Badge className="bg-green-100 text-green-800">Actif</Badge>
-                      ) : (
-                        <Badge className="bg-gray-100 text-gray-800">Inactif</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {ambassador.is_active && (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleRemoveAmbassador(ambassador.id, ambassador.hairdresser_id)}
-                          className="flex items-center space-x-1"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                          <span>Retirer</span>
-                        </Button>
-                      )}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                            <MoreVertical className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {/* Option 1 : Dashboard parrainage */}
+                          <DropdownMenuItem
+                            onClick={() => router.push(`/dashboard/ambassadors/${ambassador.hairdresser_id}/referrals`)}
+                          >
+                            <BarChart3 className="w-4 h-4" />
+                            Dashboard parrainage
+                          </DropdownMenuItem>
+
+                          {/* Option 2 : Configurer lien */}
+                          <DropdownMenuItem onClick={() => openLinkDialog(ambassador)}>
+                            <Link2 className="w-4 h-4" />
+                            Configurer lien
+                          </DropdownMenuItem>
+
+                          {/* Option 3 : Copier le lien */}
+                          <DropdownMenuItem onClick={() => handleCopyLink(ambassador)}>
+                            <Copy className="w-4 h-4" />
+                            Copier le lien
+                          </DropdownMenuItem>
+
+                          <DropdownMenuSeparator />
+
+                          {/* Option 4 : Afficher profil */}
+                          <DropdownMenuItem
+                            onClick={() => router.push(`/dashboard/hairdressers/${ambassador.hairdresser_id}`)}
+                          >
+                            <User className="w-4 h-4" />
+                            Afficher profil
+                          </DropdownMenuItem>
+
+                          <DropdownMenuSeparator />
+
+                          {/* Option 5 : Retirer */}
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onClick={() => setRemoveAmbassador(ambassador)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Retirer
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </motion.tr>
                 ))}
@@ -669,6 +818,92 @@ export default function AmbassadorsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* ── Modal : Configurer lien (Option 2) ── */}
+      <Dialog open={isLinkDialogOpen} onOpenChange={setIsLinkDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Configurer le lien de parrainage</DialogTitle>
+            <DialogDescription>
+              Définissez le slug unique pour {linkAmbassador?.hairdresser?.name || 'cet ambassadeur'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="link-slug">Slug du lien</Label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground whitespace-nowrap">
+                  parrainage.fady-app.fr/
+                </span>
+                <Input
+                  id="link-slug"
+                  placeholder="ex: donoobarber"
+                  value={linkSlug}
+                  onChange={(e) => {
+                    setLinkSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))
+                    setSlugError('')
+                  }}
+                />
+              </div>
+              {slugError && (
+                <p className="text-sm text-destructive">{slugError}</p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <Label htmlFor="link-active">Lien actif</Label>
+                <p className="text-sm text-muted-foreground">
+                  {linkActive
+                    ? 'Le lien est accessible publiquement'
+                    : 'Le lien affichera une page "Lien invalide"'}
+                </p>
+              </div>
+              <Switch
+                id="link-active"
+                checked={linkActive}
+                onCheckedChange={setLinkActive}
+              />
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-2">
+              <Button variant="outline" onClick={() => setIsLinkDialogOpen(false)} disabled={linkSaving}>
+                Annuler
+              </Button>
+              <Button onClick={handleSaveLink} disabled={linkSaving || !linkSlug.trim()}>
+                {linkSaving ? 'Sauvegarde...' : 'Sauvegarder'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── AlertDialog : Confirmer retrait (Option 5) ── */}
+      <AlertDialog open={!!removeAmbassador} onOpenChange={(open) => !open && setRemoveAmbassador(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Retirer le statut ambassadeur</AlertDialogTitle>
+            <AlertDialogDescription>
+              Êtes-vous sûr de vouloir retirer le statut ambassadeur à{' '}
+              <span className="font-semibold text-foreground">
+                {removeAmbassador?.hairdresser?.name}
+              </span>{' '}
+              ? Son lien sera désactivé mais l'historique des parrainages sera conservé.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removing}>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmRemove}
+              disabled={removing}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {removing ? 'Retrait en cours...' : 'Retirer'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

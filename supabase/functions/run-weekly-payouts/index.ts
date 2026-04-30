@@ -184,14 +184,13 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Créer payout_log d'abord (statut pending) pour idempotency DB
-      const idemKey = `payout_${hairdresser.id}_${isoNow.year}W${isoNow.week}`;
-
       const { data: existingLog } = await supabase
         .from('payout_logs')
         .select('id, stripe_transfer_id, payout_status')
         .eq('hairdresser_id', hairdresser.id)
         .gte('created_at', new Date(now.getTime() - 24 * 3600 * 1000).toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (existingLog && existingLog.payout_status === 'paid') {
@@ -199,7 +198,17 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      let payoutLogId: string | null = existingLog?.id ?? null;
+      if (existingLog?.payout_status === 'pending' && existingLog.stripe_transfer_id) {
+        summary.errors.push(`payout_log ${existingLog.id} pending avec transfer ${existingLog.stripe_transfer_id}: revue manuelle requise`);
+        continue;
+      }
+
+      // Réutiliser seulement un log pending sans transfer. Un log failed/reversed doit laisser
+      // un retry créer une nouvelle idempotency key Stripe.
+      let payoutLogId: string | null =
+        existingLog?.payout_status === 'pending' && !existingLog.stripe_transfer_id
+          ? existingLog.id
+          : null;
       if (!payoutLogId) {
         const { data: newLog, error: logError } = await supabase
           .from('payout_logs')
@@ -218,9 +227,12 @@ Deno.serve(async (req) => {
         payoutLogId = newLog.id;
       }
 
+      const idemKey = `payout_${hairdresser.id}_${isoNow.year}W${isoNow.week}_${payoutLogId}`;
+
       // Créer le transfer Stripe avec idempotency
+      let transfer: Stripe.Transfer | null = null;
       try {
-        const transfer = await stripe.transfers.create({
+        transfer = await stripe.transfers.create({
           amount: totalCents,
           currency: 'eur',
           destination: stripeAccount.stripe_account_id,
@@ -234,17 +246,23 @@ Deno.serve(async (req) => {
         }, { idempotencyKey: idemKey });
 
         // Mettre à jour payout_log + bookings
-        await supabase.from('payout_logs').update({
+        const { error: payoutUpdateError } = await supabase.from('payout_logs').update({
           payout_status: 'paid',
           stripe_transfer_id: transfer.id,
           updated_at: now.toISOString()
         }).eq('id', payoutLogId!);
+        if (payoutUpdateError) {
+          throw new Error(`payout_log update failed after transfer ${transfer.id}: ${payoutUpdateError.message}`);
+        }
 
         const bookingIds = validBookings.map((b) => b.id);
-        await supabase.from('bookings').update({
+        const { error: bookingsUpdateError } = await supabase.from('bookings').update({
           payout_status: 'paid',
           payout_logs_id: payoutLogId
         }).in('id', bookingIds);
+        if (bookingsUpdateError) {
+          throw new Error(`bookings update failed after transfer ${transfer.id}: ${bookingsUpdateError.message}`);
+        }
 
         summary.processed++;
         summary.total_amount_eur += totalEuros;
@@ -262,10 +280,36 @@ Deno.serve(async (req) => {
       } catch (e) {
         const msg = (e as Error).message;
         console.error(`❌ [Payouts] Transfer failed for ${hairdresser.name}:`, msg);
-        await supabase.from('payout_logs').update({
+
+        if (transfer?.id) {
+          try {
+            await stripe.transfers.createReversal(transfer.id, {
+              amount: totalCents,
+              metadata: {
+                hairdresser_id: hairdresser.id,
+                payout_log_id: payoutLogId!,
+                source: 'payout_db_update_failed',
+                error: msg.slice(0, 450)
+              }
+            }, { idempotencyKey: `payout_failure_reversal_${payoutLogId}_${transfer.id}` });
+            console.warn(`⚠️ [Payouts] Transfer ${transfer.id} reversé après échec DB`);
+          } catch (reversalError) {
+            const reversalMsg = (reversalError as Error).message;
+            console.error(`❌ [Payouts] Reversal failed for transfer ${transfer.id}:`, reversalMsg);
+            summary.errors.push(`reversal ${hairdresser.id}: ${reversalMsg}`);
+          }
+        }
+
+        const failedUpdate: Record<string, string> = {
           payout_status: 'failed',
           updated_at: now.toISOString()
-        }).eq('id', payoutLogId!);
+        };
+        if (transfer?.id) failedUpdate.stripe_transfer_id = transfer.id;
+
+        const { error: failedLogError } = await supabase.from('payout_logs').update(failedUpdate).eq('id', payoutLogId!);
+        if (failedLogError) {
+          summary.errors.push(`payout_log failed update ${hairdresser.id}: ${failedLogError.message}`);
+        }
         summary.errors.push(`transfer ${hairdresser.id}: ${msg}`);
       }
     }

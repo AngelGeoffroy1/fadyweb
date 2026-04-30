@@ -2,12 +2,12 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/browser'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { motion } from 'framer-motion'
-import { Wallet, TrendingUp, Users, AlertCircle, CreditCard, ArrowRight, Calendar } from 'lucide-react'
+import { Wallet, TrendingUp, Users, AlertCircle, CreditCard, ArrowRight, Calendar, Info } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 type PaymentWithDetails = {
@@ -31,6 +31,30 @@ type StripeAccount = {
   hairdresser?: {
     name: string
   }
+}
+
+type AdminStripePaymentStats = {
+  total_volume: number
+}
+
+function KpiInfoButton({ label }: { label: string }) {
+  return (
+    <span className="group relative inline-flex">
+      <button
+        type="button"
+        aria-label="Afficher le calcul du KPI"
+        className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      >
+        <Info className="size-4" />
+      </button>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute right-0 top-8 z-20 w-64 rounded-md border bg-popover px-3 py-2 text-left text-xs leading-relaxed text-popover-foreground opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+      >
+        {label}
+      </span>
+    </span>
+  )
 }
 
 export default function StripePaymentsDashboard() {
@@ -109,12 +133,23 @@ export default function StripePaymentsDashboard() {
           : payment.hairdressers
       }))
 
+      const { data: adminStripeStats, error: adminStripeStatsError } = await supabase.functions.invoke<AdminStripePaymentStats>(
+        'admin-stripe-payment-stats'
+      )
+
+      if (adminStripeStatsError) {
+        console.error('Erreur stats paiements admin:', adminStripeStatsError)
+      }
+
       // Calculer les stats
       const totalAccounts = accounts?.length || 0
       const activeAccounts = accounts?.filter(a => a.onboarding_status === 'completed' && a.charges_enabled && a.payouts_enabled).length || 0
       const pendingAccounts = accounts?.filter(a => a.onboarding_status === 'pending').length || 0
       const totalTransactions = payments?.length || 0
-      const totalVolume = payments?.reduce((sum, p) => sum + Number(p.amount), 0) || 0
+      const fallbackVisibleVolume = payments
+        ?.filter(payment => payment.status === 'succeeded')
+        .reduce((sum, p) => sum + Number(p.amount), 0) || 0
+      const totalVolume = Number(adminStripeStats?.total_volume ?? fallbackVisibleVolume)
       const billableBookings = (bookingsData || []).filter(
         booking =>
           booking.status !== 'cancelled' &&
@@ -285,6 +320,9 @@ export default function StripePaymentsDashboard() {
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Volume total
               </CardTitle>
+              <CardAction>
+                <KpiInfoButton label="Somme globale des montants stripe_payments.amount dont le statut est succeeded. Le calcul passe par une fonction admin pour éviter les restrictions RLS du navigateur." />
+              </CardAction>
             </CardHeader>
             <CardContent>
               <div className="flex items-center space-x-2">
@@ -292,7 +330,7 @@ export default function StripePaymentsDashboard() {
                 <span className="text-2xl font-bold">{stats.total_volume.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €</span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Tous paiements confondus
+                Paiements réussis
               </p>
             </CardContent>
           </Card>
@@ -304,6 +342,9 @@ export default function StripePaymentsDashboard() {
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Frais user collectés
               </CardTitle>
+              <CardAction>
+                <KpiInfoButton label="Somme de bookings.fady_commission_user pour les réservations payées par carte, non annulées, non remboursées, avec un canal et une date de disponibilité des fonds." />
+              </CardAction>
             </CardHeader>
             <CardContent>
               <div className="flex items-center space-x-2">
@@ -323,6 +364,9 @@ export default function StripePaymentsDashboard() {
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Solde en rétention
               </CardTitle>
+              <CardAction>
+                <KpiInfoButton label="Somme de bookings.total_price pour les réservations payées par carte encore en payout_status pending, hors réservations annulées ou remboursées." />
+              </CardAction>
             </CardHeader>
             <CardContent>
               <div className="flex items-center space-x-2">

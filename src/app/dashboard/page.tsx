@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/browser'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { motion } from 'framer-motion'
-import { Users, Scissors, Calendar, DollarSign, FileCheck, Clock } from 'lucide-react'
+import { Users, Scissors, Calendar, DollarSign, FileCheck, Clock, Info } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts'
 
 interface DashboardStats {
@@ -28,57 +28,26 @@ interface DashboardStats {
   }>
 }
 
-const COLORS = ['#bd38fc', '#a020e8', '#8615d4', '#6d0fc0', '#5a0ca3']
+const COLORS = ['#bd38fc', '#a020e8', '#8615d4', '#6d0fc0', '#5a0ca3', '#7c3aed', '#9333ea']
 
-// Fonction pour générer les statistiques mensuelles réelles
-async function generateMonthlyStats(supabase: ReturnType<typeof createClient>) {
-  const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
-  const currentDate = new Date()
-  const monthlyStats = []
-
-  // Générer les 6 derniers mois
-  for (let i = 5; i >= 0; i--) {
-    const targetDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1)
-    const nextMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 1)
-    
-    const monthName = months[targetDate.getMonth()]
-    
-    // Récupérer les utilisateurs créés ce mois
-    const { count: usersCount } = await supabase
-      .from('users')
-      .select('id', { count: 'exact' })
-      .gte('created_at', targetDate.toISOString())
-      .lt('created_at', nextMonth.toISOString())
-
-    // Récupérer les coiffeurs créés ce mois
-    const { count: hairdressersCount } = await supabase
-      .from('hairdressers')
-      .select('id', { count: 'exact' })
-      .gte('created_at', targetDate.toISOString())
-      .lt('created_at', nextMonth.toISOString())
-
-    // Récupérer les réservations créées ce mois
-    const { data: bookingsData } = await supabase
-      .from('bookings')
-      .select('total_price, status')
-      .gte('created_at', targetDate.toISOString())
-      .lt('created_at', nextMonth.toISOString())
-
-    const bookingsCount = bookingsData?.length || 0
-    const revenue = bookingsData
-      ?.filter(b => b.status === 'completed')
-      .reduce((sum, booking) => sum + booking.total_price, 0) || 0
-
-    monthlyStats.push({
-      month: monthName,
-      users: usersCount || 0,
-      hairdressers: hairdressersCount || 0,
-      bookings: bookingsCount,
-      revenue: revenue
-    })
-  }
-
-  return monthlyStats
+function KpiInfoButton({ label }: { label: string }) {
+  return (
+    <span className="group relative inline-flex">
+      <button
+        type="button"
+        aria-label="Afficher le calcul du KPI"
+        className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      >
+        <Info className="size-4" />
+      </button>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute left-0 top-8 z-20 w-72 max-w-[calc(100vw-3rem)] rounded-md border bg-popover px-3 py-2 text-left text-xs leading-relaxed text-popover-foreground opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+      >
+        {label}
+      </span>
+    </span>
+  )
 }
 
 export default function DashboardPage() {
@@ -91,48 +60,13 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        // Récupérer les statistiques de base
-        const [usersResult, hairdressersResult, bookingsResult, diplomasResult] = await Promise.all([
-          supabase.from('users').select('id', { count: 'exact' }),
-          supabase.from('hairdressers').select('id', { count: 'exact' }),
-          supabase.from('bookings').select('id, total_price, status, created_at', { count: 'exact' }),
-          supabase.from('hairdresser_diploma_verification').select('verification_status')
-        ])
+        const { data, error } = await supabase.functions.invoke<DashboardStats>('admin-dashboard-stats')
 
-        const totalUsers = usersResult.count || 0
-        const totalHairdressers = hairdressersResult.count || 0
-        const totalBookings = bookingsResult.count || 0
+        if (error) {
+          throw error
+        }
 
-        // Calculer le revenu total des réservations complétées
-        const completedBookings = bookingsResult.data?.filter(b => b.status === 'completed') || []
-        const totalRevenue = completedBookings.reduce((sum, booking) => sum + booking.total_price, 0)
-
-        // Statistiques des diplômes
-        const diplomas = diplomasResult.data || []
-        const pendingDiplomas = diplomas.filter(d => d.verification_status === 'pending').length
-        const verifiedDiplomas = diplomas.filter(d => d.verification_status === 'verified').length
-
-        // Statistiques mensuelles réelles basées sur les données Supabase
-        const monthlyStats = await generateMonthlyStats(supabase)
-
-        // Statistiques par statut de réservation
-        const bookingStatusStats = [
-          { status: 'En attente', count: bookingsResult.data?.filter(b => b.status === 'pending').length || 0 },
-          { status: 'Confirmées', count: bookingsResult.data?.filter(b => b.status === 'confirmed').length || 0 },
-          { status: 'Complétées', count: bookingsResult.data?.filter(b => b.status === 'completed').length || 0 },
-          { status: 'Annulées', count: bookingsResult.data?.filter(b => b.status === 'cancelled').length || 0 },
-        ]
-
-        setStats({
-          totalUsers,
-          totalHairdressers,
-          totalBookings,
-          totalRevenue,
-          pendingDiplomas,
-          verifiedDiplomas,
-          monthlyStats,
-          bookingStatusStats
-        })
+        setStats(data)
       } catch (error) {
         console.error('Erreur lors du chargement des statistiques:', error)
       } finally {
@@ -170,6 +104,7 @@ export default function DashboardPage() {
       icon: Users,
       color: 'text-[#bd38fc]',
       bgColor: 'bg-[#bd38fc]/10',
+      tooltip: 'Nombre total de lignes dans la table users. Le calcul est fait côté Edge Function admin pour éviter les limites et restrictions RLS du navigateur.',
     },
     {
       title: 'Coiffeurs',
@@ -177,6 +112,7 @@ export default function DashboardPage() {
       icon: Scissors,
       color: 'text-[#a020e8]',
       bgColor: 'bg-[#a020e8]/10',
+      tooltip: 'Nombre total de lignes dans la table hairdressers. Le calcul utilise le count global côté serveur admin.',
     },
     {
       title: 'Réservations',
@@ -184,13 +120,15 @@ export default function DashboardPage() {
       icon: Calendar,
       color: 'text-[#8615d4]',
       bgColor: 'bg-[#8615d4]/10',
+      tooltip: 'Nombre total de réservations dans bookings, tous statuts confondus : pending, confirmed, completed, cancelled, refund, past et en_cours.',
     },
     {
-      title: 'Revenus',
-      value: `${stats.totalRevenue.toLocaleString()} €`,
+      title: 'Revenus FADY',
+      value: `${stats.totalRevenue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €`,
       icon: DollarSign,
       color: 'text-[#6d0fc0]',
       bgColor: 'bg-[#6d0fc0]/10',
+      tooltip: 'Somme de fady_commission_user + fady_commission_barber pour les réservations carte non annulées/non remboursées, avec un canal et une date de disponibilité des fonds.',
     },
   ]
 
@@ -215,7 +153,10 @@ export default function DashboardPage() {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">{card.title}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-medium text-muted-foreground">{card.title}</p>
+                      <KpiInfoButton label={card.tooltip} />
+                    </div>
                     <p className="text-2xl font-bold text-foreground">{card.value}</p>
                   </div>
                   <div className={`p-3 rounded-full ${card.bgColor}`}>
@@ -380,7 +321,7 @@ export default function DashboardPage() {
           <Card>
             <CardHeader>
               <CardTitle>Revenus mensuels</CardTitle>
-              <CardDescription>Évolution des revenus</CardDescription>
+              <CardDescription>Évolution des revenus FADY</CardDescription>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
@@ -388,7 +329,7 @@ export default function DashboardPage() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" />
                   <YAxis />
-                  <Tooltip formatter={(value) => [`${value} €`, 'Revenus']} />
+                  <Tooltip formatter={(value) => [`${value} €`, 'Revenus FADY']} />
                   <Bar dataKey="revenue" fill="#bd38fc" />
                 </BarChart>
               </ResponsiveContainer>

@@ -23,6 +23,9 @@ type SupportTicket = Database['public']['Tables']['support_tickets']['Row'] & {
     booking_date: string
     booking_time: string
     total_price: number
+    fady_commission_user: number | null
+    fady_commission_barber: number | null
+    channel: string | null
     location_type: string
     address: string | null
     status: string
@@ -76,6 +79,9 @@ export default function SupportTicketDetailPage() {
             booking_date,
             booking_time,
             total_price,
+            fady_commission_user,
+            fady_commission_barber,
+            channel,
             location_type,
             address,
             status,
@@ -271,16 +277,25 @@ export default function SupportTicketDetailPage() {
   const calculatePricing = () => {
     if (!ticket?.bookings) return null
 
-    const totalPrice = ticket.bookings.total_price
+    const totalPrice = Number(ticket.bookings.total_price || 0)
     const commissionPercentage = ticket.subscription_fee?.commission_percentage || 0
-    const commission = (totalPrice * commissionPercentage) / 100
-    const netPayout = totalPrice - commission
+    const userFee = Number(ticket.bookings.fady_commission_user || 0)
+    const storedBarberCommission = Number(ticket.bookings.fady_commission_barber || 0)
+    const hasV2Financials = Boolean(ticket.bookings.channel) || userFee > 0 || storedBarberCommission > 0
+    const serviceAmount = Math.max(0, totalPrice - userFee)
+    const commission = hasV2Financials
+      ? storedBarberCommission
+      : (serviceAmount * commissionPercentage) / 100
+    const netPayout = Math.max(0, serviceAmount - commission)
 
     return {
       totalPrice,
+      serviceAmount,
+      userFee,
       commissionPercentage,
       commission,
-      netPayout
+      netPayout,
+      hasV2Financials
     }
   }
 
@@ -531,9 +546,16 @@ export default function SupportTicketDetailPage() {
                       <span className="font-semibold text-lg">{calculatePricing()?.totalPrice.toFixed(2)} €</span>
                     </div>
 
+                    {calculatePricing()?.userFee ? (
+                      <div className="flex justify-between items-center py-2 border-b">
+                        <span className="text-sm text-muted-foreground">Frais service client</span>
+                        <span className="font-medium text-green-600">+ {calculatePricing()?.userFee.toFixed(2)} €</span>
+                      </div>
+                    ) : null}
+
                     <div className="flex justify-between items-center py-2">
                       <div>
-                        <p className="text-sm text-muted-foreground">Commission Fady</p>
+                        <p className="text-sm text-muted-foreground">Commission barber FADY</p>
                         {ticket.hairdresser_subscription && (
                           <p className="text-xs text-muted-foreground">
                             Abonnement: <Badge variant="outline" className="text-xs">{ticket.hairdresser_subscription.subscription_type}</Badge>
@@ -545,7 +567,7 @@ export default function SupportTicketDetailPage() {
                           - {calculatePricing()?.commission.toFixed(2)} €
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          ({calculatePricing()?.commissionPercentage}%)
+                          {calculatePricing()?.hasV2Financials ? 'Montant V2 enregistré' : `(${calculatePricing()?.commissionPercentage}%)`}
                         </p>
                       </div>
                     </div>
@@ -680,8 +702,9 @@ export default function SupportTicketDetailPage() {
           onOpenChange={setRefundDialogOpen}
           bookingId={ticket.bookings.id}
           totalAmount={calculatePricing()!.totalPrice}
-          commission={calculatePricing()!.commission}
           commissionPercentage={calculatePricing()!.commissionPercentage}
+          userFee={calculatePricing()!.userFee}
+          barberCommission={calculatePricing()!.commission}
           onRefundSuccess={handleRefundSuccess}
         />
       )}

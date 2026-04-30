@@ -129,11 +129,29 @@ Deno.serve(async (req) => {
     const totalPaid = Number(booking.total_price);
     const refundAmount = Number(amount ?? totalPaid);
     const amountInCents = Math.round(refundAmount * 100);
+    if (!Number.isFinite(totalPaid) || totalPaid <= 0) {
+      throw new Error('Invalid booking total amount');
+    }
+    if (!Number.isFinite(refundAmount) || refundAmount <= 0) {
+      throw new Error('Refund amount must be greater than 0');
+    }
+    if (refundAmount > totalPaid) {
+      throw new Error('Refund amount cannot exceed booking total');
+    }
 
     const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, { apiVersion: '2024-12-18.acacia' });
     const pi = await stripe.paymentIntents.retrieve(booking.stripe_payment_intent_id);
     const isV2 = (pi.metadata?.version === 'v2') || !pi.transfer_data?.destination;
-    const userFee = Number(pi.metadata?.user_fee ?? booking.fady_commission_user ?? 0);
+    const userFee = isV2 ? Number(pi.metadata?.user_fee ?? booking.fady_commission_user ?? 0) : 0;
+    const barberCommission = isV2 ? Number(pi.metadata?.barber_commission ?? booking.fady_commission_barber ?? 0) : 0;
+    const clientPaysPlatformFees = isV2
+      ? round2(userFee + barberCommission)
+      : round2(totalPaid * commissionPercentage / 100);
+    const maxClientPaysRefund = round2(Math.max(0, totalPaid - clientPaysPlatformFees));
+    if ((commissionHandling === 'client_pays' || commissionHandling === 'keep_platform_commission')
+        && refundAmount > maxClientPaysRefund) {
+      throw new Error(`Refund amount exceeds client_pays maximum (${maxClientPaysRefund.toFixed(2)}€)`);
+    }
 
     let platformAmountKept = 0;
     let hairdresserAmountReversed = 0;
@@ -158,10 +176,9 @@ Deno.serve(async (req) => {
       case 'client_pays':
       case 'keep_platform_commission':
       default: {
-        // FADY garde sa commission, on récupère la part barber
-        const commission = round2(refundAmount * commissionPercentage / 100) + (isV2 ? Math.min(userFee, refundAmount - round2(refundAmount * commissionPercentage / 100)) : 0);
-        platformAmountKept = commission;
-        hairdresserAmountReversed = round2(refundAmount - commission);
+        // Le client absorbe les frais : le remboursement est plafonné au net hors frais.
+        platformAmountKept = round2(Math.max(0, totalPaid - refundAmount));
+        hairdresserAmountReversed = refundAmount;
         if (commissionHandling === 'refund_all') {
           platformAmountKept = 0;
           hairdresserAmountReversed = refundAmount;
@@ -252,12 +269,18 @@ Deno.serve(async (req) => {
       refundRecord = insertedRefundRecord;
     }
 
-    await supabase.from('bookings').update({
+    const { error: bookingUpdateError } = await supabase.from('bookings').update({
       status: 'refund', payout_status: 'cancelled'
     }).eq('id', bookingId);
+    if (bookingUpdateError) {
+      throw new Error(`Failed to update booking after refund ${refund.id}: ${bookingUpdateError.message}`);
+    }
 
-    await supabase.from('stripe_payments').update({ status: 'refunded' })
+    const { error: stripePaymentUpdateError } = await supabase.from('stripe_payments').update({ status: 'refunded' })
       .eq('stripe_payment_intent_id', booking.stripe_payment_intent_id);
+    if (stripePaymentUpdateError) {
+      throw new Error(`Failed to update stripe payment after refund ${refund.id}: ${stripePaymentUpdateError.message}`);
+    }
 
     return new Response(JSON.stringify({
       success: true,

@@ -32,8 +32,9 @@ interface RefundDialogProps {
   onOpenChange: (open: boolean) => void
   bookingId: string
   totalAmount: number
-  commission: number
   commissionPercentage: number
+  userFee: number
+  barberCommission: number
   onRefundSuccess: () => void
 }
 
@@ -42,8 +43,9 @@ export function RefundDialog({
   onOpenChange,
   bookingId,
   totalAmount,
-  commission,
   commissionPercentage,
+  userFee,
+  barberCommission,
   onRefundSuccess,
 }: RefundDialogProps) {
   // V2 — 3 modes de prise en charge :
@@ -53,8 +55,15 @@ export function RefundDialog({
   // (rétro-compat : keep_platform_commission ≡ client_pays, refund_all ≡ barber_pays)
   type RefundMode = 'barber_pays' | 'client_pays' | 'fady_covers'
 
-  const [refundAmount, setRefundAmount] = useState<string>(totalAmount.toString())
   const [commissionHandling, setCommissionHandling] = useState<RefundMode>('client_pays')
+  const roundCurrency = (amount: number) => Math.round(amount * 100) / 100
+  const totalPlatformFees = Math.max(0, userFee) + Math.max(0, barberCommission)
+  const fallbackPlatformFees = roundCurrency((totalAmount * commissionPercentage) / 100)
+  const feesKeptWhenClientPays = totalPlatformFees > 0 ? roundCurrency(totalPlatformFees) : fallbackPlatformFees
+  const maxClientPaysRefund = roundCurrency(Math.max(0, totalAmount - feesKeptWhenClientPays))
+  const getDefaultRefundAmount = (mode: RefundMode) =>
+    mode === 'client_pays' ? maxClientPaysRefund : totalAmount
+  const [refundAmount, setRefundAmount] = useState<string>(() => getDefaultRefundAmount('client_pays').toString())
   const [reason, setReason] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -62,17 +71,16 @@ export function RefundDialog({
   // Calculs en temps réel
   const parsedAmount = parseFloat(refundAmount) || 0
   const isFullRefund = parsedAmount === totalAmount
-  const isPartialRefund = parsedAmount > 0 && parsedAmount < totalAmount
+  const refundMax = commissionHandling === 'client_pays' ? maxClientPaysRefund : totalAmount
 
   let platformKept = 0
   let hairdresserReversed = 0
   const clientRefunded = parsedAmount
 
   if (commissionHandling === 'client_pays') {
-    // FADY garde sa commission, on récupère la part barber
-    const proportionalCommission = (parsedAmount * commissionPercentage) / 100
-    platformKept = proportionalCommission
-    hairdresserReversed = parsedAmount - proportionalCommission
+    // Le client absorbe les frais : le remboursement est plafonné au net hors frais.
+    platformKept = roundCurrency(Math.max(0, totalAmount - parsedAmount))
+    hairdresserReversed = parsedAmount
   } else if (commissionHandling === 'barber_pays') {
     // Barber absorbe tout (Connect débité)
     platformKept = 0
@@ -86,12 +94,17 @@ export function RefundDialog({
   // Réinitialiser le montant quand le dialog s'ouvre
   useEffect(() => {
     if (open) {
-      setRefundAmount(totalAmount.toString())
       setCommissionHandling('client_pays')
+      setRefundAmount(getDefaultRefundAmount('client_pays').toString())
       setReason('')
       setError(null)
     }
-  }, [open, totalAmount])
+  }, [open, totalAmount, maxClientPaysRefund])
+
+  const handleModeChange = (value: RefundMode) => {
+    setCommissionHandling(value)
+    setRefundAmount(getDefaultRefundAmount(value).toString())
+  }
 
   const handleRefund = async () => {
     setLoading(true)
@@ -103,8 +116,8 @@ export function RefundDialog({
         throw new Error('Le montant doit être supérieur à 0')
       }
 
-      if (parsedAmount > totalAmount) {
-        throw new Error('Le montant ne peut pas dépasser le montant total de la réservation')
+      if (parsedAmount > refundMax) {
+        throw new Error('Le montant dépasse le maximum autorisé pour ce mode de remboursement')
       }
 
       // Créer le client Supabase et récupérer le token
@@ -223,6 +236,10 @@ export function RefundDialog({
               <span className="text-sm text-muted-foreground">Montant total de la réservation</span>
               <span className="font-semibold text-foreground">{totalAmount.toFixed(2)} €</span>
             </div>
+            <div className="flex justify-between items-center text-xs text-muted-foreground mt-1">
+              <span>Maximum en mode client</span>
+              <span>{maxClientPaysRefund.toFixed(2)} €</span>
+            </div>
           </div>
 
           {/* Montant à rembourser */}
@@ -232,27 +249,27 @@ export function RefundDialog({
               id="refund-amount"
               type="number"
               min="0"
-              max={totalAmount}
+              max={refundMax}
               step="0.01"
               value={refundAmount}
               onChange={(e) => setRefundAmount(e.target.value)}
-              placeholder={totalAmount.toString()}
+              placeholder={refundMax.toString()}
             />
           </div>
 
           {/* Qui supporte les frais */}
           <div className="space-y-1.5">
             <Label htmlFor="commission-handling" className="text-sm">Qui supporte les frais ?</Label>
-            <Select value={commissionHandling} onValueChange={(value: RefundMode) => setCommissionHandling(value)}>
+            <Select value={commissionHandling} onValueChange={handleModeChange}>
               <SelectTrigger id="commission-handling">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="client_pays">
-                  Client (FADY garde {commissionPercentage}%)
+                  Client (FADY garde les frais)
                 </SelectItem>
                 <SelectItem value="barber_pays">
-                  Coiffeur (frais débités du Connect)
+                  Coiffeur (payout réduit ou débité)
                 </SelectItem>
                 <SelectItem value="fady_covers">
                   FADY absorbe (geste commercial)
@@ -297,13 +314,13 @@ export function RefundDialog({
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">Fady</span>
                   <span className={`font-medium ${platformKept < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
-                    {platformKept >= 0 ? '+' : ''}{platformKept.toFixed(2)} €
+                    {platformKept >= 0 ? '+' : ''}{roundCurrency(platformKept).toFixed(2)} €
                   </span>
                 </div>
 
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">Coiffeur (Connect)</span>
-                  <span className="font-medium text-red-600 dark:text-red-400">−{hairdresserReversed.toFixed(2)} €</span>
+                  <span className="font-medium text-red-600 dark:text-red-400">−{roundCurrency(hairdresserReversed).toFixed(2)} €</span>
                 </div>
               </div>
             </div>
@@ -328,7 +345,7 @@ export function RefundDialog({
           </Button>
           <Button
             onClick={handleRefund}
-            disabled={loading || parsedAmount <= 0 || parsedAmount > totalAmount}
+            disabled={loading || parsedAmount <= 0 || parsedAmount > refundMax}
             variant="destructive"
           >
             {loading ? 'Remboursement en cours...' : `Rembourser ${parsedAmount.toFixed(2)} €`}

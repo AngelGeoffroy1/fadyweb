@@ -170,7 +170,7 @@ export default function AppVersionPage() {
 
     const versionRegex = /^\d+\.\d+\.\d+$/
     if (!versionRegex.test(formData.minimum_version) || !versionRegex.test(formData.latest_version)) {
-      toast.error('Le format de version doit être X.X.X (ex: 1.0.0)')
+      toast.error('Le format de version doit être trois nombres séparés par des points (ex: 1.0.28, 2.14.103…)')
       return
     }
 
@@ -227,10 +227,12 @@ export default function AppVersionPage() {
             <div className="flex-1">
               <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">Information importante</h3>
               <p className="text-sm text-blue-800 dark:text-blue-200">
-                Chaque app (Fady client et Fady Pro) a sa propre configuration. La version minimale définit la version
-                en dessous de laquelle l'app ne fonctionnera pas (popup non‑dismissable). Activer "Forcer la mise à jour"
-                oblige tous les utilisateurs à installer la dernière version, même si la leur est ≥ minimum.
-                Les apps re‑vérifient à chaque retour d'arrière‑plan (avec un throttle de 5 minutes).
+                Chaque app (Fady client et Fady Pro) a sa propre configuration. La popup s'affiche dès qu'un utilisateur
+                est sur une version inférieure à <strong>« Version minimale requise »</strong>. Le toggle
+                « Forcer la mise à jour » détermine ensuite si la popup est <strong>bloquante</strong> (impossible à fermer)
+                ou simplement <strong>dismissable</strong> via « Plus tard ». Le champ « Dernière version disponible » sert
+                uniquement à afficher le numéro de version dans la popup. Les apps re‑vérifient à chaque retour
+                d'arrière‑plan (avec un throttle de 5 minutes).
               </p>
             </div>
           </div>
@@ -276,12 +278,12 @@ export default function AppVersionPage() {
                       </Label>
                       <Input
                         id={`minimum_version_${app}`}
-                        placeholder="1.0.0"
+                        placeholder="ex: 1.0.28"
                         value={formData.minimum_version}
                         onChange={(e) => updateForm(app, { minimum_version: e.target.value })}
                       />
                       <p className="text-xs text-muted-foreground">
-                        Les utilisateurs avec une version inférieure seront bloqués jusqu'à la mise à jour
+                        Les utilisateurs avec une version inférieure verront la popup (bloquante ou non selon « Forcer la mise à jour »)
                       </p>
                     </div>
 
@@ -292,7 +294,7 @@ export default function AppVersionPage() {
                       <div className="flex gap-2">
                         <Input
                           id={`latest_version_${app}`}
-                          placeholder="1.0.6"
+                          placeholder="ex: 1.0.28"
                           value={formData.latest_version}
                           onChange={(e) => updateForm(app, { latest_version: e.target.value })}
                           className="flex-1"
@@ -326,7 +328,7 @@ export default function AppVersionPage() {
                         </p>
                       )}
                       <p className="text-xs text-muted-foreground">
-                        Version actuelle disponible sur l'App Store. Cliquez sur « Récupérer » pour la synchroniser automatiquement.
+                        Numéro de version affiché dans la popup (ne déclenche pas l'affichage). Cliquez sur « Récupérer » pour la synchroniser depuis l'App Store.
                       </p>
                     </div>
                   </div>
@@ -338,7 +340,7 @@ export default function AppVersionPage() {
                         Forcer la mise à jour
                       </Label>
                       <p className="text-sm text-muted-foreground">
-                        Oblige tous les utilisateurs à installer la dernière version (popup bloquante)
+                        ON : popup <strong>bloquante</strong>, l'utilisateur ne peut pas la fermer. OFF : popup affichée mais dismissable via « Plus tard ».
                       </p>
                     </div>
                     <Switch

@@ -248,7 +248,7 @@ Deno.serve(async (req: Request) => {
       const { data: existingRefund } = await supabase
         .from('refunds').select('id').eq('stripe_refund_id', refund.id).maybeSingle();
       if (!existingRefund) {
-        await supabase.from('refunds').insert({
+        const { error: refundInsertError } = await supabase.from('refunds').insert({
           booking_id: bookingId,
           stripe_refund_id: refund.id,
           payment_intent_id: booking.stripe_payment_intent_id,
@@ -261,14 +261,23 @@ Deno.serve(async (req: Request) => {
           status: refund.status === 'succeeded' ? 'succeeded' : 'pending',
           admin_id: null
         });
+        if (refundInsertError) {
+          throw new Error(`Failed to create refund record after refund ${refund.id}: ${refundInsertError.message}`);
+        }
       }
 
-      await supabase.from('bookings').update({
+      const { error: bookingUpdateError } = await supabase.from('bookings').update({
         status: 'refund', payout_status: 'cancelled'
       }).eq('id', bookingId);
+      if (bookingUpdateError) {
+        throw new Error(`Failed to update booking after refund ${refund.id}: ${bookingUpdateError.message}`);
+      }
 
-      await supabase.from('stripe_payments').update({ status: 'refunded' })
+      const { error: stripePaymentUpdateError } = await supabase.from('stripe_payments').update({ status: 'refunded' })
         .eq('stripe_payment_intent_id', booking.stripe_payment_intent_id);
+      if (stripePaymentUpdateError) {
+        throw new Error(`Failed to update stripe payment after refund ${refund.id}: ${stripePaymentUpdateError.message}`);
+      }
 
       refundResult = {
         refundId: refund.id, refundStatus: refund.status,

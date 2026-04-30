@@ -259,13 +259,19 @@ Deno.serve(async (req) => {
     }
 
     // Mettre à jour la booking
-    await supabase.from('bookings').update({
+    const { error: bookingUpdateError } = await supabase.from('bookings').update({
       status: 'refund',
       payout_status: 'cancelled' // s'assure que le cron ignore cette booking
     }).eq('id', bookingId);
+    if (bookingUpdateError) {
+      throw new Error(`Failed to update booking after refund ${refund.id}: ${bookingUpdateError.message}`);
+    }
 
-    await supabase.from('stripe_payments').update({ status: 'refunded' })
+    const { error: stripePaymentUpdateError } = await supabase.from('stripe_payments').update({ status: 'refunded' })
       .eq('stripe_payment_intent_id', booking.stripe_payment_intent_id);
+    if (stripePaymentUpdateError) {
+      throw new Error(`Failed to update stripe payment after refund ${refund.id}: ${stripePaymentUpdateError.message}`);
+    }
 
     return new Response(JSON.stringify({
       success: true,

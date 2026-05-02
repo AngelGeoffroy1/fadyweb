@@ -431,7 +431,7 @@ export default function AmbassadorsPage() {
       return
     }
 
-    const url = `parrainage.fady-app.fr/${ambassador.ambassador_link.slug}`
+    const url = `ambassador.fady-app.fr/${ambassador.ambassador_link.slug}`
     try {
       await navigator.clipboard.writeText(url)
       toast({ title: 'Lien copié !', description: url })
@@ -834,7 +834,7 @@ export default function AmbassadorsPage() {
               <Label htmlFor="link-slug">Slug du lien</Label>
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground whitespace-nowrap">
-                  parrainage.fady-app.fr/
+                  ambassador.fady-app.fr/
                 </span>
                 <Input
                   id="link-slug"

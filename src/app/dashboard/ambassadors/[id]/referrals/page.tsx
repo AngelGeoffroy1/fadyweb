@@ -148,7 +148,7 @@ export default function ReferralsDashboardPage() {
             </h1>
             {ambassador?.slug && (
               <p className="text-sm text-muted-foreground">
-                parrainage.fady-app.fr/{ambassador.slug}
+                ambassador.fady-app.fr/{ambassador.slug}
               </p>
             )}
           </div>

@@ -18,7 +18,7 @@ type Referral = {
   phone: string | null
   email: string | null
   profile_type: 'PRO' | 'DIPLÔMÉ' | 'AMATEUR' | null
-  registered_at: string | null
+  created_at: string | null
 }
 
 type AmbassadorInfo = {
@@ -56,6 +56,21 @@ export default function ReferralsDashboardPage() {
 
   useEffect(() => {
     fetchData()
+
+    const channel = supabase
+      .channel(`referrals-${hairdresserId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'ambassador_referrals',
+      }, () => {
+        fetchData()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [hairdresserId])
 
   const fetchData = async () => {
@@ -90,9 +105,9 @@ export default function ReferralsDashboardPage() {
       if (link) {
         const { data: referralsData, error } = await supabase
           .from('ambassador_referrals')
-          .select('id, first_name, last_name, phone, email, profile_type, registered_at')
+          .select('id, first_name, last_name, phone, email, profile_type, created_at')
           .eq('ambassador_link_id', link.id)
-          .order('registered_at', { ascending: false })
+          .order('created_at', { ascending: false })
 
         if (error) throw error
         setReferrals(referralsData || [])
@@ -282,11 +297,11 @@ export default function ReferralsDashboardPage() {
                       ) : 'N/A'}
                     </TableCell>
                     <TableCell>
-                      {referral.registered_at ? (
+                      {referral.created_at ? (
                         <div className="flex items-center space-x-2">
                           <Calendar className="w-4 h-4 text-muted-foreground" />
                           <span className="text-sm">
-                            {new Date(referral.registered_at).toLocaleDateString('fr-FR')}
+                            {new Date(referral.created_at).toLocaleDateString('fr-FR')}
                           </span>
                         </div>
                       ) : 'N/A'}
